@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient: Deep Oxford Midnight to Royal Blue -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#081226"/>
+      <stop offset="50%" stop-color="#0f2757"/>
+      <stop offset="100%" stop-color="#1a4696"/>
+    </linearGradient>
+
+    <!-- Top Highlight -->
+    <radialGradient id="topHighlight" cx="50%" cy="10%" r="60%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Red Dot Glow -->
+    <radialGradient id="dotGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#e11d48" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#e11d48" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e11d48" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Drop Shadow for W -->
+    <filter id="shadowW" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#020817" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" rx="110" fill="url(#topHighlight)"/>
+  
+  <!-- Subtle Inner Hairline Border -->
+  <rect x="16" y="16" width="480" height="480" rx="98" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.12"/>
+
+  <!-- Shadow & Main W Monogram -->
+  <g filter="url(#shadowW)">
+    <!-- Left Wing (Slight soft tint) -->
+    <path d="M 100 165 L 176 370 L 256 240" fill="none" stroke="#eef4ff" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Right Wing (Pure white) -->
+    <path d="M 256 240 L 336 370 L 412 165" fill="none" stroke="#ffffff" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Center Pen Nib Slit Cut -->
+    <line x1="256" y1="240" x2="256" y2="285" stroke="#0f2757" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="256" cy="285" r="4" fill="#38bdf8"/>
+  </g>
+
+  <!-- Signature Crimson Red Dot Glow & Circle -->
+  <circle cx="428" cy="142" r="56" fill="url(#dotGlow)"/>
+  <circle cx="428" cy="142" r="28" fill="#e11d48"/>
+  <!-- Highlight on Red Dot -->
+  <circle cx="419" cy="133" r="10" fill="#ffb4c3" opacity="0.8"/>
+</svg>
