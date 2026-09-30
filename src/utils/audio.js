@@ -12,7 +12,7 @@ class SpeechService {
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
     this.audioPlayer = typeof window !== 'undefined' ? new Audio() : null;
     this.voices = [];
-    this.rate = 0.92;
+    this.rate = 1.05;
     this.pitch = 1.0;
     this.selectedVoice = null;
     this.isSpeaking = false;
@@ -129,16 +129,17 @@ class SpeechService {
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
     if (isOnline && this.audioPlayer) {
-      // Type 2 = Standard neutral American dictionary studio recording
-      const primaryUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
-      const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+      // Primary: Google TTS US (fastest global CDN, ~250ms latency, standard American neutral voice)
+      const primaryUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+      // Fallback: Youdao standard neutral dictionary recording
+      const fallbackUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
 
       // In background, fetch blob and cache to IndexedDB for permanent offline use
       fetchWordAudioBlob(cleanWord).catch(() => {});
 
       this.playHtmlAudio(primaryUrl, token, handleStart, handleEnd, () => {
         if (this.currentPlayToken !== token) return;
-        // Fallback to secondary US online stream
+        // Fallback to dictionary recording
         this.playHtmlAudio(fallbackUrl, token, handleStart, handleEnd, () => {
           if (this.currentPlayToken !== token) return;
           // Absolute offline/failure fallback to SpeechSynthesis

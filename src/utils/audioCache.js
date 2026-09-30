@@ -105,14 +105,14 @@ export async function fetchWordAudioBlob(word) {
   if (!word) return null;
   const cleanWord = word.trim().toLowerCase();
 
-  // Tier 1: Real standard American dictionary studio pronunciation (type=2: US neutral)
-  const source1 = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+  // Primary: Google TTS US (fastest global CDN, ~250ms response, clean standard neutral American)
+  const source1 = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
   
-  // Tier 2: Google Static Dictionary US sound
+  // Secondary: Google Static Dictionary US sound
   const source2 = `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${cleanWord}--_us_1.mp3`;
 
-  // Tier 3: Google TTS US Standard Neutral Voice
-  const source3 = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+  // Tertiary: Youdao dictionary
+  const source3 = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
 
   const sources = [source1, source2, source3];
 

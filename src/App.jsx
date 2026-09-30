@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CEFR_LEVELS } from './data/words';
 import { speechService } from './utils/audio';
-import { getCachedAudioCount, downloadAudioPack } from './utils/audioCache';
+import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
 import { getStoredData, saveStoredData, resetAllProgress } from './utils/storage';
 import './App.css';
@@ -11,7 +11,7 @@ export default function App() {
   const [data, setData] = useState(() => getStoredData());
   const [activeTab, setActiveTab] = useState('study'); // 'study' | 'review' | 'search' | 'stats' | 'add'
   const [selectedLevel, setSelectedLevel] = useState('IELTS_FOCUS'); // 'ALL', 'A1'..'C1', 'IELTS_FOCUS'
-  const [audioSpeed, setAudioSpeed] = useState(0.9);
+  const [audioSpeed, setAudioSpeed] = useState(1.05);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
@@ -254,22 +254,37 @@ export default function App() {
     );
   };
 
-  // Auto-play audio when study word appears (cut in half to 175ms for instant responsive speech)
+  // Pre-fetch next 2 upcoming words in background so they play in 0ms from local cache without network lag
+  useEffect(() => {
+    if (activeTab === 'study' && queue.length > 0) {
+      const next1 = queue[currentIndex + 1]?.word;
+      const next2 = queue[currentIndex + 2]?.word;
+      if (next1) fetchWordAudioBlob(next1).catch(() => {});
+      if (next2) fetchWordAudioBlob(next2).catch(() => {});
+    } else if (activeTab === 'review' && reviewQueue.length > 0) {
+      const next1 = reviewQueue[reviewIndex + 1]?.word;
+      const next2 = reviewQueue[reviewIndex + 2]?.word;
+      if (next1) fetchWordAudioBlob(next1).catch(() => {});
+      if (next2) fetchWordAudioBlob(next2).catch(() => {});
+    }
+  }, [activeTab, currentIndex, reviewIndex, queue.length, reviewQueue.length]);
+
+  // Auto-play audio when study word appears (instant 50ms trigger!)
   useEffect(() => {
     if (activeTab === 'study' && queue[currentIndex] && !submitted) {
       const timer = setTimeout(() => {
         playCurrentAudio(queue[currentIndex].word);
-      }, 175);
+      }, 50);
       return () => clearTimeout(timer);
     }
   }, [activeTab, currentIndex, selectedLevel, submitted]);
 
-  // Auto-play audio when review word appears (cut in half to 175ms)
+  // Auto-play audio when review word appears (instant 50ms trigger!)
   useEffect(() => {
     if (activeTab === 'review' && reviewQueue[reviewIndex] && !reviewSubmitted) {
       const timer = setTimeout(() => {
         playCurrentAudio(reviewQueue[reviewIndex].word);
-      }, 175);
+      }, 50);
       return () => clearTimeout(timer);
     }
   }, [activeTab, reviewIndex, reviewStackType, reviewSubmitted, reviewQueue.length]);
@@ -712,14 +727,14 @@ export default function App() {
               <span className="section-label">Select Difficulty</span>
               <span className="speed-toggle-container">
                 <button 
-                  className={`speed-pill ${audioSpeed === 0.75 ? 'active' : ''}`}
-                  onClick={() => setAudioSpeed(0.75)}
+                  className={`speed-pill ${audioSpeed === 0.85 ? 'active' : ''}`}
+                  onClick={() => setAudioSpeed(0.85)}
                 >
-                  0.75x
+                  0.85x
                 </button>
                 <button 
-                  className={`speed-pill ${audioSpeed === 0.9 ? 'active' : ''}`}
-                  onClick={() => setAudioSpeed(0.9)}
+                  className={`speed-pill ${audioSpeed === 1.05 ? 'active' : ''}`}
+                  onClick={() => setAudioSpeed(1.05)}
                 >
                   1.0x
                 </button>
