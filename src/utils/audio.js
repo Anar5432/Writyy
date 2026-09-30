@@ -1,7 +1,9 @@
 // High-Fidelity Audio & Speech Service for Writyy
-// 1. Instant Offline Playback via IndexedDB Studio Audio Cache
-// 2. Real Standard Neutral English Dictionary Studio Recording (Type 2 - US Standard)
-// 3. Fallback High-Quality Web Speech Synthesis (locked strictly to en-US neutral voice)
+// Features:
+// 1. Strict Atomic Play Token Locking (Prevents overlapping, double-sounds, or race conditions)
+// 2. Instant Offline Playback via IndexedDB Studio Audio Cache
+// 3. Real Standard Neutral American English Dictionary Studio Recording (Type 2 - US Standard)
+// 4. Clean Fallbacks with AbortError filtering (never mistakenly triggers synthesis on pause)
 
 import { getCachedAudioBlob, fetchWordAudioBlob } from './audioCache';
 
@@ -10,12 +12,13 @@ class SpeechService {
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
     this.audioPlayer = typeof window !== 'undefined' ? new Audio() : null;
     this.voices = [];
-    this.rate = 0.92; // Natural, clear pacing for vocabulary learning
+    this.rate = 0.92;
     this.pitch = 1.0;
     this.selectedVoice = null;
     this.isSpeaking = false;
     this.safetyTimer = null;
     this.currentObjectUrl = null;
+    this.currentPlayToken = 0; // Atomic token to prevent duplicate or overlapping playback
 
     if (this.synth) {
       this.initVoices();
@@ -24,8 +27,7 @@ class SpeechService {
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => this.initVoices(), 300);
-        setTimeout(() => this.initVoices(), 1000);
-        setTimeout(() => this.initVoices(), 2500);
+        setTimeout(() => this.initVoices(), 1200);
       }
     }
   }
@@ -36,7 +38,6 @@ class SpeechService {
     if (!all || all.length === 0) return;
     this.voices = all;
 
-    // Filter strictly for English voices
     const englishVoices = this.voices.filter(v => 
       v.lang && (v.lang.startsWith('en') || v.lang.startsWith('en-') || v.lang.startsWith('en_'))
     );
@@ -44,9 +45,8 @@ class SpeechService {
     if (englishVoices.length === 0) return;
 
     // Standard Neutral Voice Priority: Standard American (General American / International)
-    // Avoids heavy British accents or foreign robotic voices
     const neutralUsVoice = englishVoices.find(v => 
-      v.name.includes('Samantha') || // iOS default clear US voice
+      v.name.includes('Samantha') || 
       v.name.includes('Google US English') ||
       v.name.includes('Natural') ||
       v.name.includes('Ava') ||
@@ -72,12 +72,14 @@ class SpeechService {
     const cleanWord = text.trim();
     if (!cleanWord) return;
 
+    // 1. Immediately increment token & stop any ongoing sound
+    const token = ++this.currentPlayToken;
     this.stop();
 
     // Safety watchdog: ensure isSpeaking resets after 4s max
     if (this.safetyTimer) clearTimeout(this.safetyTimer);
     this.safetyTimer = setTimeout(() => {
-      if (this.isSpeaking) {
+      if (this.currentPlayToken === token && this.isSpeaking) {
         this.cleanupObjectUrl();
         this.isSpeaking = false;
         if (onEnd) onEnd();
@@ -85,93 +87,125 @@ class SpeechService {
     }, 4500);
 
     const handleStart = () => {
+      if (this.currentPlayToken !== token) return;
       this.isSpeaking = true;
       if (onStart) onStart();
     };
 
     const handleEnd = () => {
+      if (this.currentPlayToken !== token) return;
       if (this.safetyTimer) clearTimeout(this.safetyTimer);
       this.cleanupObjectUrl();
       this.isSpeaking = false;
       if (onEnd) onEnd();
     };
 
-    // 1. TIER 1: Check Offline IndexedDB Studio Audio Cache
+    // 2. TIER 1: Check Offline IndexedDB Studio Audio Cache
     try {
       const cachedBlob = await getCachedAudioBlob(cleanWord);
+      // Abort if another sound was requested while awaiting cache
+      if (this.currentPlayToken !== token) return;
+
       if (cachedBlob && cachedBlob.size > 1000 && this.audioPlayer) {
         this.cleanupObjectUrl();
         this.currentObjectUrl = URL.createObjectURL(cachedBlob);
-        this.playHtmlAudio(this.currentObjectUrl, handleStart, handleEnd, () => {
-          // If object url playback fails, fall through to online/synthesis
-          this.playOnlineOrSynthesize(cleanWord, handleStart, handleEnd);
+        this.playHtmlAudio(this.currentObjectUrl, token, handleStart, handleEnd, () => {
+          if (this.currentPlayToken !== token) return;
+          this.playOnlineOrSynthesize(cleanWord, token, handleStart, handleEnd);
         });
         return;
       }
     } catch (e) {
-      // IndexedDB lookup skipped
+      if (this.currentPlayToken !== token) return;
     }
 
-    // 2. TIER 2 & 3: Play Online Real Studio Dictionary Audio (Standard Neutral)
-    this.playOnlineOrSynthesize(cleanWord, handleStart, handleEnd);
+    // 3. TIER 2 & 3: Play Online Real Studio Dictionary Audio (Standard Neutral)
+    this.playOnlineOrSynthesize(cleanWord, token, handleStart, handleEnd);
   }
 
-  playOnlineOrSynthesize(cleanWord, handleStart, handleEnd) {
+  playOnlineOrSynthesize(cleanWord, token, handleStart, handleEnd) {
+    if (this.currentPlayToken !== token) return;
+
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
     if (isOnline && this.audioPlayer) {
-      // Standard neutral dictionary pronunciation (Type 2: US standard studio recording)
+      // Type 2 = Standard neutral American dictionary studio recording
       const primaryUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
       const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
 
       // In background, fetch blob and cache to IndexedDB for permanent offline use
       fetchWordAudioBlob(cleanWord).catch(() => {});
 
-      this.playHtmlAudio(primaryUrl, handleStart, handleEnd, () => {
+      this.playHtmlAudio(primaryUrl, token, handleStart, handleEnd, () => {
+        if (this.currentPlayToken !== token) return;
         // Fallback to secondary US online stream
-        this.playHtmlAudio(fallbackUrl, handleStart, handleEnd, () => {
+        this.playHtmlAudio(fallbackUrl, token, handleStart, handleEnd, () => {
+          if (this.currentPlayToken !== token) return;
           // Absolute offline/failure fallback to SpeechSynthesis
-          this.speakWithSynthesis(cleanWord, handleStart, handleEnd);
+          this.speakWithSynthesis(cleanWord, token, handleStart, handleEnd);
         });
       });
     } else {
       // Device is offline and word not yet cached: use local speech synthesis with neutral US voice
-      this.speakWithSynthesis(cleanWord, handleStart, handleEnd);
+      this.speakWithSynthesis(cleanWord, token, handleStart, handleEnd);
     }
   }
 
-  playHtmlAudio(url, onStart, onEnd, onError) {
-    if (!this.audioPlayer) {
-      if (onError) onError();
+  playHtmlAudio(url, token, onStart, onEnd, onError) {
+    if (!this.audioPlayer || this.currentPlayToken !== token) {
       return;
     }
 
-    this.audioPlayer.pause();
-    this.audioPlayer.src = url;
-    this.audioPlayer.playbackRate = this.rate || 0.92;
-
-    this.audioPlayer.onplay = () => {
-      onStart();
+    let errorHandled = false;
+    const triggerErrorOnce = () => {
+      if (errorHandled) return;
+      errorHandled = true;
+      if (this.currentPlayToken === token && onError) {
+        onError();
+      }
     };
 
-    this.audioPlayer.onended = () => {
-      onEnd();
-    };
+    try {
+      this.audioPlayer.pause();
+      this.audioPlayer.currentTime = 0;
+      this.audioPlayer.src = url;
+      this.audioPlayer.playbackRate = this.rate || 0.92;
 
-    this.audioPlayer.onerror = () => {
-      if (onError) onError();
-    };
+      this.audioPlayer.onplay = () => {
+        if (this.currentPlayToken === token) {
+          onStart();
+        }
+      };
 
-    const playPromise = this.audioPlayer.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        if (onError) onError();
-      });
+      this.audioPlayer.onended = () => {
+        if (this.currentPlayToken === token) {
+          onEnd();
+        }
+      };
+
+      this.audioPlayer.onerror = (e) => {
+        triggerErrorOnce();
+      };
+
+      const playPromise = this.audioPlayer.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // If the play was aborted/interrupted by a newer sound call, DO NOT trigger error fallback!
+          if (err && err.name === 'AbortError') {
+            return;
+          }
+          if (this.currentPlayToken === token) {
+            triggerErrorOnce();
+          }
+        });
+      }
+    } catch (err) {
+      triggerErrorOnce();
     }
   }
 
-  speakWithSynthesis(text, onStart, onEnd) {
-    if (!this.synth) {
+  speakWithSynthesis(text, token, onStart, onEnd) {
+    if (!this.synth || this.currentPlayToken !== token) {
       if (onEnd) onEnd();
       return;
     }
@@ -182,8 +216,6 @@ class SpeechService {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = this.rate || 0.92;
       utterance.pitch = this.pitch || 1.0;
-      
-      // Standard Neutral English (en-US, not thick British or foreign)
       utterance.lang = 'en-US';
 
       if (this.selectedVoice) {
@@ -194,15 +226,15 @@ class SpeechService {
       }
 
       utterance.onstart = () => {
-        if (onStart) onStart();
+        if (this.currentPlayToken === token && onStart) onStart();
       };
 
       utterance.onend = () => {
-        if (onEnd) onEnd();
+        if (this.currentPlayToken === token && onEnd) onEnd();
       };
 
       utterance.onerror = () => {
-        if (onEnd) onEnd();
+        if (this.currentPlayToken === token && onEnd) onEnd();
       };
 
       this.synth.speak(utterance);
@@ -231,6 +263,9 @@ class SpeechService {
       try {
         this.audioPlayer.pause();
         this.audioPlayer.currentTime = 0;
+        this.audioPlayer.onplay = null;
+        this.audioPlayer.onended = null;
+        this.audioPlayer.onerror = null;
       } catch (e) {}
     }
     if (this.synth) {

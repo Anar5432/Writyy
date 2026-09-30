@@ -404,11 +404,7 @@ export default function App() {
       const nextIdx = currentIndex + 1;
       setCurrentIndex(nextIdx);
       resetStudyInputs();
-      setTimeout(() => {
-        if (queue[nextIdx]) {
-          playCurrentAudio(queue[nextIdx].word);
-        }
-      }, 250);
+      // Auto-play is handled with exact 350ms pause by the useEffect listener
     } else {
       alert('🎉 Excellent! You have completed all words in this batch.');
       setCurrentIndex(0);
@@ -431,7 +427,7 @@ export default function App() {
       });
       setTimeout(() => {
         playCurrentAudio(prevWordObj.word);
-      }, 150);
+      }, 350);
     }
   };
 
@@ -448,7 +444,7 @@ export default function App() {
       });
       setTimeout(() => {
         playCurrentAudio(prevWordObj.word);
-      }, 150);
+      }, 350);
     }
   };
 
@@ -497,11 +493,7 @@ export default function App() {
       const nextIdx = reviewIndex + 1;
       setReviewIndex(nextIdx);
       resetReviewInputs();
-      setTimeout(() => {
-        if (reviewQueue[nextIdx]) {
-          playCurrentAudio(reviewQueue[nextIdx].word);
-        }
-      }, 200);
+      // Auto-play is handled with exact 350ms pause by the review useEffect listener
     } else {
       alert('🎉 Stack review session completed!');
       setReviewIndex(0);
