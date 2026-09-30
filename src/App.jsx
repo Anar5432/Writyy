@@ -254,22 +254,22 @@ export default function App() {
     );
   };
 
-  // Auto-play audio when study word appears
+  // Auto-play audio when study word appears (cut in half to 175ms for instant responsive speech)
   useEffect(() => {
     if (activeTab === 'study' && queue[currentIndex] && !submitted) {
       const timer = setTimeout(() => {
         playCurrentAudio(queue[currentIndex].word);
-      }, 350);
+      }, 175);
       return () => clearTimeout(timer);
     }
   }, [activeTab, currentIndex, selectedLevel, submitted]);
 
-  // Auto-play audio when review word appears (Fixes review auto-pronunciation!)
+  // Auto-play audio when review word appears (cut in half to 175ms)
   useEffect(() => {
     if (activeTab === 'review' && reviewQueue[reviewIndex] && !reviewSubmitted) {
       const timer = setTimeout(() => {
         playCurrentAudio(reviewQueue[reviewIndex].word);
-      }, 350);
+      }, 175);
       return () => clearTimeout(timer);
     }
   }, [activeTab, reviewIndex, reviewStackType, reviewSubmitted, reviewQueue.length]);
@@ -427,7 +427,7 @@ export default function App() {
       });
       setTimeout(() => {
         playCurrentAudio(prevWordObj.word);
-      }, 350);
+      }, 175);
     }
   };
 
@@ -444,7 +444,7 @@ export default function App() {
       });
       setTimeout(() => {
         playCurrentAudio(prevWordObj.word);
-      }, 350);
+      }, 175);
     }
   };
 
