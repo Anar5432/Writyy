@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CEFR_LEVELS } from './data/words';
 import { speechService } from './utils/audio';
+import { getCachedAudioCount, downloadAudioPack } from './utils/audioCache';
 import { sfx } from './utils/sfx';
 import { getStoredData, saveStoredData, resetAllProgress } from './utils/storage';
 import './App.css';
@@ -47,11 +48,23 @@ export default function App() {
   const [newLevel, setNewLevel] = useState('B2');
   const [addSuccessMsg, setAddSuccessMsg] = useState('');
 
+  // Over-the-Air (OTA) Updates State
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [swRegistration, setSwRegistration] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Audio Studio & Offline Pack State
+  const [offlineAudioCount, setOfflineAudioCount] = useState(0);
+  const [showAudioModal, setShowAudioModal] = useState(false);
+  const [isDownloadingAudio, setIsDownloadingAudio] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, percent: 0, currentWord: '' });
+  const abortControllerRef = useRef(null);
+
   const inputRef = useRef(null);
   const reviewInputRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  // Check if running as installed standalone app on phone
+  // Check if running as installed standalone app on phone & setup update listeners
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
@@ -65,8 +78,106 @@ export default function App() {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    // Initial check of offline audio cache count
+    getCachedAudioCount().then(setOfflineAudioCount).catch(() => {});
+
+    // Listen for new Service Worker update event
+    const handleUpdateReady = (e) => {
+      console.log('[App] New Over-the-air update available!');
+      setUpdateAvailable(true);
+      if (e.detail && e.detail.registration) {
+        setSwRegistration(e.detail.registration);
+      }
+    };
+
+    window.addEventListener('writyy-update-ready', handleUpdateReady);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('writyy-update-ready', handleUpdateReady);
+    };
   }, []);
+
+  // Handle applying the update and reloading immediately
+  const handleApplyUpdate = () => {
+    setIsUpdating(true);
+    showToast('🚀 Applying update to Writyy...');
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+
+      const reg = swRegistration || (typeof window !== 'undefined' ? window.__WRITYY_SW_REGISTRATION__ : null);
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      } else {
+        window.location.reload();
+      }
+    } else {
+      window.location.reload();
+    }
+
+    // Safety timeout reload
+    setTimeout(() => window.location.reload(), 1500);
+  };
+
+  // Manual Check for Updates
+  const handleManualCheckUpdate = async () => {
+    if (!navigator.onLine) {
+      showToast('⚠️ Offline: Please connect to the internet to check for updates.');
+      return;
+    }
+    showToast('Checking for Writyy updates...');
+    if (typeof window !== 'undefined' && window.checkForWrityyUpdate) {
+      const res = await window.checkForWrityyUpdate();
+      if (res.status === 'update-found') {
+        setUpdateAvailable(true);
+        showToast('🚀 New update ready! Click "Update Now" to apply.');
+      } else {
+        showToast('✓ Writyy is up to date with the latest features!');
+      }
+    } else {
+      showToast('✓ Writyy is up to date.');
+    }
+  };
+
+  // Download audio files for offline use into IndexedDB
+  const handleStartDownloadAudio = async (targetWords) => {
+    if (isDownloadingAudio) return;
+    if (!navigator.onLine) {
+      showToast('⚠️ Connect to Wi-Fi/Internet to download offline audio.');
+      return;
+    }
+
+    setIsDownloadingAudio(true);
+    abortControllerRef.current = new AbortController();
+
+    try {
+      await downloadAudioPack(
+        targetWords,
+        (prog) => setDownloadProgress(prog),
+        abortControllerRef.current.signal
+      );
+      const updatedCount = await getCachedAudioCount();
+      setOfflineAudioCount(updatedCount);
+      showToast(`✓ All studio sounds saved! ${updatedCount} words ready offline.`);
+    } catch (err) {
+      showToast('Audio download interrupted.');
+    } finally {
+      setIsDownloadingAudio(false);
+      setDownloadProgress({ current: 0, total: 0, percent: 0, currentWord: '' });
+    }
+  };
+
+  const handleCancelDownload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsDownloadingAudio(false);
+    showToast('Download cancelled.');
+  };
 
   const handleInstallClick = () => {
     if (deferredPrompt) {
@@ -508,6 +619,27 @@ export default function App() {
       )}
 
       <div className="mobile-shell">
+        {/* Over-the-air Update Notification Banner */}
+        {updateAvailable && (
+          <div className="update-notification-banner">
+            <div className="update-banner-content">
+              <span className="update-icon">🚀</span>
+              <div className="update-text">
+                <span className="update-title">New Update Available!</span>
+                <span className="update-subtitle">Studio neutral voice & system updates ready.</span>
+              </div>
+            </div>
+            <div className="update-actions">
+              <button className="btn-update-now" onClick={handleApplyUpdate} disabled={isUpdating}>
+                {isUpdating ? 'Updating...' : 'Update & Reload'}
+              </button>
+              <button className="btn-update-dismiss" onClick={() => setUpdateAvailable(false)} title="Dismiss">
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Top App Header (Image 1 & 2 inspired) */}
         <header className="app-topbar">
           <button 
@@ -524,7 +656,18 @@ export default function App() {
             <span className="brand-dot"></span>
           </div>
 
-          <div className="topbar-right" style={{ width: '40px' }}></div>
+          <div className="topbar-right">
+            <button 
+              className="header-audio-btn" 
+              onClick={() => setShowAudioModal(true)}
+              title="Studio Audio & Offline Voice Pack"
+            >
+              <span>🎧</span>
+              <span className="audio-cache-tag">
+                {offlineAudioCount > 0 ? `${offlineAudioCount}` : 'Voice'}
+              </span>
+            </button>
+          </div>
         </header>
 
 
@@ -1413,6 +1556,92 @@ export default function App() {
 
             <button className="cta-red-button" onClick={() => setShowInstallModal(false)} style={{ marginTop: '16px' }}>
               <span>Got it, let's practice!</span>
+              <span className="btn-arrow-circle">✓</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Studio Audio & Offline Voice Pack Modal */}
+      {showAudioModal && (
+        <div className="modal-backdrop" onClick={() => setShowAudioModal(false)}>
+          <div className="install-guide-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-top">
+              <h3>🎧 Studio Audio & Offline Pack</h3>
+              <button className="modal-close-btn" onClick={() => setShowAudioModal(false)}>✕</button>
+            </div>
+
+            <div className="audio-studio-card">
+              <span className="audio-voice-badge">
+                ✓ Standard Neutral American (Studio Dictionary)
+              </span>
+              <p style={{ fontSize: '0.82rem', color: '#475569', margin: '4px 0 10px 0', lineHeight: 1.4 }}>
+                Crystal-clear recorded pronunciation without British accent or robotic screenreader mumbling.
+              </p>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155' }}>
+                  Offline Cached Sounds:
+                </span>
+                <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0284c7' }}>
+                  {offlineAudioCount} words ready
+                </span>
+              </div>
+            </div>
+
+            {isDownloadingAudio && (
+              <div className="progress-box">
+                <div className="progress-header">
+                  <span>Downloading studio audio...</span>
+                  <span>{downloadProgress.current} / {downloadProgress.total} ({downloadProgress.percent}%)</span>
+                </div>
+                <div className="progress-bar-track">
+                  <div className="progress-bar-fill" style={{ width: `${downloadProgress.percent}%` }}></div>
+                </div>
+                {downloadProgress.currentWord && (
+                  <span className="progress-current-word">Caching: "{downloadProgress.currentWord}"</span>
+                )}
+                <button 
+                  onClick={handleCancelDownload}
+                  style={{ marginTop: '8px', background: '#fee2e2', color: '#b91c1c', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  Cancel Download
+                </button>
+              </div>
+            )}
+
+            <div className="audio-download-row">
+              <button 
+                className="btn-download-pack" 
+                onClick={() => handleStartDownloadAudio(queue.slice(0, 50))}
+                disabled={isDownloadingAudio}
+              >
+                <span>📥 Download Current Deck ({Math.min(queue.length, 50)} Words)</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>~0.5 MB</span>
+              </button>
+
+              <button 
+                className="btn-download-pack" 
+                onClick={() => handleStartDownloadAudio(data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel).slice(0, 100))}
+                disabled={isDownloadingAudio}
+                style={{ background: '#334155' }}
+              >
+                <span>📥 Download {selectedLevel} Pack (100 Words)</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>~1.2 MB</span>
+              </button>
+
+              <button 
+                className="btn-download-pack"
+                onClick={handleManualCheckUpdate}
+                style={{ background: '#f1f5f9', color: '#0f172a', border: '1.5px solid #cbd5e1' }}
+              >
+                <span>🔄 Check for App Updates (Over-The-Air)</span>
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>v5.0</span>
+              </button>
+            </div>
+
+            <button className="cta-red-button" onClick={() => setShowAudioModal(false)} style={{ marginTop: '16px' }}>
+              <span>Done</span>
               <span className="btn-arrow-circle">✓</span>
             </button>
           </div>

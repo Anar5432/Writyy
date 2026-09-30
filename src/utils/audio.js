@@ -1,25 +1,27 @@
 // High-Fidelity Audio & Speech Service for Writyy
-// 1. Crystal-clear Native British Audio (HD MP3 via Google TTS CDN)
-// 2. High-Quality Web Speech Synthesis (strict English-only voice mapping, offline-ready)
+// 1. Instant Offline Playback via IndexedDB Studio Audio Cache
+// 2. Real Standard Neutral English Dictionary Studio Recording (Type 2 - US Standard)
+// 3. Fallback High-Quality Web Speech Synthesis (locked strictly to en-US neutral voice)
+
+import { getCachedAudioBlob, fetchWordAudioBlob } from './audioCache';
 
 class SpeechService {
   constructor() {
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
     this.audioPlayer = typeof window !== 'undefined' ? new Audio() : null;
     this.voices = [];
-    this.rate = 0.88; // Slightly deliberate for clear spelling listening
+    this.rate = 0.92; // Natural, clear pacing for vocabulary learning
     this.pitch = 1.0;
     this.selectedVoice = null;
     this.isSpeaking = false;
     this.safetyTimer = null;
-    this.preferNativeAudio = true;
+    this.currentObjectUrl = null;
 
     if (this.synth) {
       this.initVoices();
       if (this.synth.onvoiceschanged !== undefined) {
         this.synth.onvoiceschanged = () => this.initVoices();
       }
-      // On iOS WebKit, voices load asynchronously without onvoiceschanged firing
       if (typeof window !== 'undefined') {
         setTimeout(() => this.initVoices(), 300);
         setTimeout(() => this.initVoices(), 1000);
@@ -41,27 +43,21 @@ class SpeechService {
 
     if (englishVoices.length === 0) return;
 
-    // Prioritize high-quality British English voices
-    const britishVoice = englishVoices.find(v => 
-      v.lang === 'en-GB' || 
-      v.name.includes('UK') || 
-      v.name.includes('British') || 
-      v.name.includes('Daniel') || 
-      v.name.includes('Oliver') ||
-      v.name.includes('Serena') ||
-      v.name.includes('Stephanie') ||
-      v.name.includes('Arthur')
-    );
-
-    // US English fallback
-    const usVoice = englishVoices.find(v => 
-      v.name.includes('Samantha') || 
-      v.name.includes('Natural') || 
-      v.name.includes('Google') || 
+    // Standard Neutral Voice Priority: Standard American (General American / International)
+    // Avoids heavy British accents or foreign robotic voices
+    const neutralUsVoice = englishVoices.find(v => 
+      v.name.includes('Samantha') || // iOS default clear US voice
+      v.name.includes('Google US English') ||
+      v.name.includes('Natural') ||
+      v.name.includes('Ava') ||
+      v.name.includes('Allison') ||
+      v.name.includes('Zira') ||
+      v.name.includes('Alex') ||
       v.lang === 'en-US'
     );
 
-    this.selectedVoice = britishVoice || usVoice || englishVoices[0];
+    const fallbackEnVoice = englishVoices.find(v => v.lang.includes('US')) || englishVoices[0];
+    this.selectedVoice = neutralUsVoice || fallbackEnVoice;
   }
 
   setRate(newRate) {
@@ -71,21 +67,22 @@ class SpeechService {
     }
   }
 
-  speak(text, onStart, onEnd) {
+  async speak(text, onStart, onEnd) {
     if (!text) return;
     const cleanWord = text.trim();
     if (!cleanWord) return;
 
     this.stop();
 
-    // Safety watchdog timer: ensure isSpeaking is always reset after 4s max
+    // Safety watchdog: ensure isSpeaking resets after 4s max
     if (this.safetyTimer) clearTimeout(this.safetyTimer);
     this.safetyTimer = setTimeout(() => {
       if (this.isSpeaking) {
+        this.cleanupObjectUrl();
         this.isSpeaking = false;
         if (onEnd) onEnd();
       }
-    }, 4000);
+    }, 4500);
 
     const handleStart = () => {
       this.isSpeaking = true;
@@ -94,41 +91,82 @@ class SpeechService {
 
     const handleEnd = () => {
       if (this.safetyTimer) clearTimeout(this.safetyTimer);
+      this.cleanupObjectUrl();
       this.isSpeaking = false;
       if (onEnd) onEnd();
     };
 
-    // If online, prioritize crystal-clear HD British MP3 audio
+    // 1. TIER 1: Check Offline IndexedDB Studio Audio Cache
+    try {
+      const cachedBlob = await getCachedAudioBlob(cleanWord);
+      if (cachedBlob && cachedBlob.size > 1000 && this.audioPlayer) {
+        this.cleanupObjectUrl();
+        this.currentObjectUrl = URL.createObjectURL(cachedBlob);
+        this.playHtmlAudio(this.currentObjectUrl, handleStart, handleEnd, () => {
+          // If object url playback fails, fall through to online/synthesis
+          this.playOnlineOrSynthesize(cleanWord, handleStart, handleEnd);
+        });
+        return;
+      }
+    } catch (e) {
+      // IndexedDB lookup skipped
+    }
+
+    // 2. TIER 2 & 3: Play Online Real Studio Dictionary Audio (Standard Neutral)
+    this.playOnlineOrSynthesize(cleanWord, handleStart, handleEnd);
+  }
+
+  playOnlineOrSynthesize(cleanWord, handleStart, handleEnd) {
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (this.preferNativeAudio && isOnline && this.audioPlayer) {
-      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-GB&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
-      
-      this.audioPlayer.src = audioUrl;
-      this.audioPlayer.playbackRate = this.rate || 0.9;
 
-      this.audioPlayer.onplay = () => {
-        handleStart();
-      };
+    if (isOnline && this.audioPlayer) {
+      // Standard neutral dictionary pronunciation (Type 2: US standard studio recording)
+      const primaryUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+      const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
 
-      this.audioPlayer.onended = () => {
-        handleEnd();
-      };
+      // In background, fetch blob and cache to IndexedDB for permanent offline use
+      fetchWordAudioBlob(cleanWord).catch(() => {});
 
-      this.audioPlayer.onerror = () => {
-        // Fallback to local speech synthesis if network stream fails
-        this.speakWithSynthesis(cleanWord, handleStart, handleEnd);
-      };
-
-      const playPromise = this.audioPlayer.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // If browser policy blocked HTML5 play, fallback to speech synthesis
+      this.playHtmlAudio(primaryUrl, handleStart, handleEnd, () => {
+        // Fallback to secondary US online stream
+        this.playHtmlAudio(fallbackUrl, handleStart, handleEnd, () => {
+          // Absolute offline/failure fallback to SpeechSynthesis
           this.speakWithSynthesis(cleanWord, handleStart, handleEnd);
         });
-      }
+      });
     } else {
-      // 100% Offline: use local SpeechSynthesis with verified English voice
+      // Device is offline and word not yet cached: use local speech synthesis with neutral US voice
       this.speakWithSynthesis(cleanWord, handleStart, handleEnd);
+    }
+  }
+
+  playHtmlAudio(url, onStart, onEnd, onError) {
+    if (!this.audioPlayer) {
+      if (onError) onError();
+      return;
+    }
+
+    this.audioPlayer.pause();
+    this.audioPlayer.src = url;
+    this.audioPlayer.playbackRate = this.rate || 0.92;
+
+    this.audioPlayer.onplay = () => {
+      onStart();
+    };
+
+    this.audioPlayer.onended = () => {
+      onEnd();
+    };
+
+    this.audioPlayer.onerror = () => {
+      if (onError) onError();
+    };
+
+    const playPromise = this.audioPlayer.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        if (onError) onError();
+      });
     }
   }
 
@@ -142,11 +180,11 @@ class SpeechService {
       this.synth.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = this.rate || 0.88;
+      utterance.rate = this.rate || 0.92;
       utterance.pitch = this.pitch || 1.0;
       
-      // CRITICAL: Always explicitly set English language tag so foreign/Turkish TTS engines don't mispronounce
-      utterance.lang = 'en-GB';
+      // Standard Neutral English (en-US, not thick British or foreign)
+      utterance.lang = 'en-US';
 
       if (this.selectedVoice) {
         utterance.voice = this.selectedVoice;
@@ -174,14 +212,26 @@ class SpeechService {
     }
   }
 
+  cleanupObjectUrl() {
+    if (this.currentObjectUrl) {
+      try {
+        URL.revokeObjectURL(this.currentObjectUrl);
+      } catch (e) {}
+      this.currentObjectUrl = null;
+    }
+  }
+
   stop() {
     if (this.safetyTimer) {
       clearTimeout(this.safetyTimer);
       this.safetyTimer = null;
     }
+    this.cleanupObjectUrl();
     if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.audioPlayer.currentTime = 0;
+      try {
+        this.audioPlayer.pause();
+        this.audioPlayer.currentTime = 0;
+      } catch (e) {}
     }
     if (this.synth) {
       try {

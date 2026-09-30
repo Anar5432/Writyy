@@ -1,5 +1,5 @@
-// Service Worker for 100% Offline PWA & Automatic Cloud Synchronization
-const CACHE_NAME = 'writyy-offline-v4';
+// Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
+const CACHE_NAME = 'writyy-v5-studio-audio';
 
 const CORE_ASSETS = [
   '/',
@@ -14,7 +14,6 @@ const CORE_ASSETS = [
 
 // Pre-cache core assets and discover production bundled scripts/styles
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       // 1. Add core shell files
@@ -46,6 +45,14 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Listen for manual update trigger (user taps "Update Now" in the app banner)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[SW] SKIP_WAITING received, activating new version immediately...');
+    self.skipWaiting();
+  }
+});
+
 // Take control of all pages immediately and purge older caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -71,7 +78,6 @@ self.addEventListener('fetch', (event) => {
   // 1. App Navigation Requests (e.g. user opens the app or taps home screen icon)
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      // First try to fetch from network to get latest updates if online
       fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
           const copy = networkResponse.clone();
@@ -104,8 +110,6 @@ self.addEventListener('fetch', (event) => {
         // Offline: silently ignore network error, cachedResponse is used
       });
 
-      // If we have it in cache, return it immediately!
-      // Otherwise wait for network response
       return cachedResponse || fetchPromise;
     })
   );

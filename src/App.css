@@ -1828,3 +1828,237 @@ html, body {
     font-size: clamp(1.3rem, 5vw, 1.7rem);
   }
 }
+
+/* ============================================================ */
+/* OVER-THE-AIR (OTA) UPDATE BANNER                             */
+/* ============================================================ */
+.update-notification-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  animation: slideDownBanner 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDownBanner {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.update-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.update-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.update-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.update-title {
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: #38bdf8;
+  letter-spacing: -0.01em;
+}
+
+.update-subtitle {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-update-now {
+  background: #38bdf8;
+  color: #0f172a;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-update-now:hover {
+  background: #7dd3fc;
+  transform: translateY(-1px);
+}
+
+.btn-update-dismiss {
+  background: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-update-dismiss:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* ============================================================ */
+/* AUDIO STUDIO & OFFLINE PACK MODAL                            */
+/* ============================================================ */
+.header-audio-btn {
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-pill);
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--oxford-blue);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.header-audio-btn:hover {
+  border-color: var(--royal-blue);
+  transform: translateY(-1px);
+}
+
+.audio-cache-tag {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.audio-studio-card {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.audio-voice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 8px;
+}
+
+.audio-download-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.btn-download-pack {
+  background: var(--oxford-blue);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s;
+}
+
+.btn-download-pack:hover:not(:disabled) {
+  background: var(--royal-blue);
+  transform: translateY(-1px);
+}
+
+.btn-download-pack:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.progress-box {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-top: 10px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 6px;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8 0%, #2563eb 100%);
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
+.progress-current-word {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 5px;
+  display: block;
+  text-align: right;
+  font-family: monospace;
+}
+
