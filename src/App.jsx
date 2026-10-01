@@ -4,6 +4,15 @@ import { speechService } from './utils/audio';
 import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
 import { getStoredData, saveStoredData, resetAllProgress } from './utils/storage';
+import { onUserAuthChange } from './utils/firebase';
+import { 
+  pushProgressToCloud, 
+  fetchProgressFromCloud, 
+  subscribeToCloudProgress, 
+  mergeCloudAndLocal, 
+  scheduleCloudSync 
+} from './utils/cloudSync';
+import AuthModal from './components/AuthModal';
 import './App.css';
 
 export default function App() {
@@ -59,6 +68,12 @@ export default function App() {
   const [isDownloadingAudio, setIsDownloadingAudio] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, percent: 0, currentWord: '' });
   const abortControllerRef = useRef(null);
+
+  // Firebase Auth & Cloud Sync State
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
 
   const inputRef = useRef(null);
   const reviewInputRef = useRef(null);
@@ -194,10 +209,89 @@ export default function App() {
     }
   };
 
-  // Save changes to localStorage
+  // Save changes to localStorage & auto-sync to Firebase Cloud
   useEffect(() => {
     saveStoredData(data);
-  }, [data]);
+    if (currentUser) {
+      setIsSyncing(true);
+      scheduleCloudSync(currentUser.uid, data);
+      const timer = setTimeout(() => setIsSyncing(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [data, currentUser]);
+
+  // Listen to Firebase Auth state & subscribe to real-time Cloud Sync
+  useEffect(() => {
+    let unsubscribeSnapshot = null;
+
+    const unsubscribeAuth = onUserAuthChange(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        setIsSyncing(true);
+        try {
+          // 1. Fetch remote progress from cloud
+          const cloudData = await fetchProgressFromCloud(user.uid);
+          if (cloudData) {
+            setData(prev => {
+              const merged = mergeCloudAndLocal(prev, cloudData);
+              // Push merged state back to cloud to guarantee local words are saved
+              pushProgressToCloud(user.uid, merged);
+              return merged;
+            });
+            setLastSyncTime(new Date());
+            showToast('☁️ Vocabulary synced with Cloud!');
+          } else {
+            // New user cloud doc: push existing local vocabulary
+            setData(currentLocal => {
+              pushProgressToCloud(user.uid, currentLocal);
+              return currentLocal;
+            });
+            setLastSyncTime(new Date());
+          }
+
+          // 2. Set up real-time listener for remote changes (e.g. from phone or another tab)
+          unsubscribeSnapshot = subscribeToCloudProgress(user.uid, (remoteData) => {
+            if (remoteData) {
+              setData(prev => mergeCloudAndLocal(prev, remoteData));
+              setLastSyncTime(new Date());
+            }
+          });
+        } catch (err) {
+          console.error('[CloudSync] Auth change sync error:', err);
+        } finally {
+          setIsSyncing(false);
+        }
+      } else {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
+      }
+    });
+
+    return () => {
+      if (unsubscribeAuth) unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
+  }, []);
+
+  // Force manual cloud synchronization
+  const handleForceSyncWithCloud = async () => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
+    setIsSyncing(true);
+    showToast('☁️ Syncing with Cloud...');
+    const success = await pushProgressToCloud(currentUser.uid, data);
+    setIsSyncing(false);
+    if (success) {
+      setLastSyncTime(new Date());
+      showToast('✓ Cloud sync complete!');
+    } else {
+      showToast('⚠️ Sync failed. Check network connection.');
+    }
+  };
 
   // Update audio speed
   useEffect(() => {
@@ -664,6 +758,16 @@ export default function App() {
           </div>
 
           <div className="topbar-right">
+            {/* Cloud Sync & Account Button */}
+            <button 
+              className="header-user-btn"
+              onClick={() => setShowAuthModal(true)}
+              title={currentUser ? `Signed in as ${currentUser.displayName || currentUser.email}` : "Cloud Sync / Sign In"}
+            >
+              <span className={`user-sync-dot ${isSyncing ? 'syncing' : ''}`}></span>
+              <span>{currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : '☁️ Cloud'}</span>
+            </button>
+
             <button 
               className="header-audio-btn" 
               onClick={() => setShowAudioModal(true)}
@@ -1654,6 +1758,16 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Firebase Cloud Sync & Authentication Modal */}
+      <AuthModal 
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        onSyncNow={handleForceSyncWithCloud}
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
+      />
     </div>
   );
 }
