@@ -4,11 +4,10 @@ import { speechService } from './utils/audio';
 import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
 import { getStoredData, saveStoredData, resetAllProgress } from './utils/storage';
-import { onUserAuthChange } from './utils/firebase';
+import { getCurrentUser } from './utils/neonDb';
 import { 
   pushProgressToCloud, 
   fetchProgressFromCloud, 
-  subscribeToCloudProgress, 
   mergeCloudAndLocal, 
   scheduleCloudSync 
 } from './utils/cloudSync';
@@ -69,8 +68,8 @@ export default function App() {
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, percent: 0, currentWord: '' });
   const abortControllerRef = useRef(null);
 
-  // Firebase Auth & Cloud Sync State
-  const [currentUser, setCurrentUser] = useState(null);
+  // Neon Auth & Cloud Sync State
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
@@ -210,100 +209,70 @@ export default function App() {
   };
 
   // Save changes to localStorage & auto-sync to Firebase Cloud
+  // Save changes to localStorage & auto-sync to Neon Cloud Database
   useEffect(() => {
     saveStoredData(data);
     if (currentUser) {
       setIsSyncing(true);
-      scheduleCloudSync(currentUser.uid, data);
+      scheduleCloudSync(currentUser, data);
       const timer = setTimeout(() => setIsSyncing(false), 1200);
       return () => clearTimeout(timer);
     }
-  }, [data, currentUser]);
+  }, [data, currentUser?.email]);
 
-  // Listen to Firebase Auth state & subscribe to real-time Cloud Sync
+  // Load progress from Neon on initial render or user login
   useEffect(() => {
-    let unsubscribeSnapshot = null;
-
-    const unsubscribeAuth = onUserAuthChange(async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        setIsSyncing(true);
-        try {
-          // 1. Fetch remote progress from cloud
-          const cloudData = await fetchProgressFromCloud(user.uid);
-          const currentLocal = getStoredData();
-
-          if (cloudData) {
-            const merged = mergeCloudAndLocal(currentLocal, cloudData);
-            setData(merged);
-            saveStoredData(merged);
-            // Push merged state back to cloud to guarantee local words are saved
-            await pushProgressToCloud(user.uid, merged);
-            setLastSyncTime(new Date());
-            showToast('☁️ Progress synced with Cloud!');
-          } else {
-            // New user cloud doc: push existing local vocabulary
-            await pushProgressToCloud(user.uid, currentLocal);
-            setLastSyncTime(new Date());
-          }
-
-          // 2. Set up real-time listener for remote changes (e.g. from laptop or phone)
-          unsubscribeSnapshot = subscribeToCloudProgress(user.uid, (remoteData) => {
-            if (remoteData) {
-              setData(prev => {
-                const merged = mergeCloudAndLocal(prev, remoteData);
-                saveStoredData(merged);
-                return merged;
-              });
-              setLastSyncTime(new Date());
-            }
-          });
-        } catch (err) {
-          console.error('[CloudSync] Auth change sync error:', err);
-        } finally {
-          setIsSyncing(false);
+    if (currentUser) {
+      setIsSyncing(true);
+      fetchProgressFromCloud(currentUser).then(async (cloudData) => {
+        const currentLocal = getStoredData();
+        if (cloudData) {
+          const merged = mergeCloudAndLocal(currentLocal, cloudData);
+          setData(merged);
+          saveStoredData(merged);
+          await pushProgressToCloud(currentUser, merged);
+          setLastSyncTime(new Date());
+          showToast('🐘 Synced with Neon Cloud!');
+        } else {
+          // Push current local vocabulary to create the cloud document
+          await pushProgressToCloud(currentUser, currentLocal);
+          setLastSyncTime(new Date());
         }
-      } else {
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
-      }
-    });
+      }).catch((err) => {
+        console.warn('[Neon Sync] Load error:', err);
+      }).finally(() => {
+        setIsSyncing(false);
+      });
+    }
+  }, [currentUser?.email]);
 
-    return () => {
-      if (unsubscribeAuth) unsubscribeAuth();
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
-    };
-  }, []);
-
-  // Force manual cloud synchronization
+  // Force manual cloud synchronization with Neon
   const handleForceSyncWithCloud = async () => {
     if (!currentUser) {
       setShowAuthModal(true);
       return;
     }
     setIsSyncing(true);
-    showToast('☁️ Syncing with Cloud...');
+    showToast('🐘 Syncing with Neon...');
     try {
-      const cloudData = await fetchProgressFromCloud(currentUser.uid);
+      const cloudData = await fetchProgressFromCloud(currentUser);
       const currentLocal = getStoredData();
       const merged = mergeCloudAndLocal(currentLocal, cloudData);
 
       saveStoredData(merged);
       setData(merged);
 
-      const success = await pushProgressToCloud(currentUser.uid, merged);
+      const success = await pushProgressToCloud(currentUser, merged);
       setIsSyncing(false);
       if (success) {
         setLastSyncTime(new Date());
-        showToast('✓ Cloud sync complete! (All words synced)');
+        showToast('✓ Neon sync complete! All words synced.');
       } else {
-        showToast('⚠️ Sync failed. Check network connection.');
+        showToast('⚠️ Sync failed. Check Neon connection.');
       }
     } catch (err) {
       setIsSyncing(false);
-      showToast('⚠️ Sync error: ' + (err.message || 'Check network'));
+      showToast('⚠️ Sync error: ' + (err.message || 'Check connection'));
     }
   };
 
@@ -1777,7 +1746,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Firebase Cloud Sync & Authentication Modal */}
+      {/* Neon Cloud Sync & Authentication Modal */}
       <AuthModal 
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
@@ -1785,6 +1754,17 @@ export default function App() {
         onSyncNow={handleForceSyncWithCloud}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
+        onUserAuthChange={(user, initialData) => {
+          setCurrentUser(user);
+          if (user && initialData) {
+            const currentLocal = getStoredData();
+            const merged = mergeCloudAndLocal(currentLocal, initialData);
+            setData(merged);
+            saveStoredData(merged);
+            pushProgressToCloud(user, merged);
+            setLastSyncTime(new Date());
+          }
+        }}
       />
     </div>
   );
