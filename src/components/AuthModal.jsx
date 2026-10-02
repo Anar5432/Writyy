@@ -56,14 +56,20 @@ export default function AuthModal({
         }, 1200);
       }
     } catch (err) {
-      console.error(err);
+      console.error('[Auth Error]', err);
       let msg = err.message || 'Authentication failed.';
       if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password')) {
-        msg = 'Invalid email or password.';
+        msg = 'Invalid email or password. If you haven\'t created an account yet, click "Create Account" above!';
+      } else if (msg.includes('auth/user-not-found')) {
+        msg = 'No account found with this email. Please switch to "Create Account" tab above.';
       } else if (msg.includes('auth/email-already-in-use')) {
-        msg = 'An account with this email already exists. Please log in.';
+        msg = 'An account with this email already exists. Switch to "Sign In" tab to log in.';
+      } else if (msg.includes('auth/weak-password')) {
+        msg = 'Password should be at least 6 characters.';
       } else if (msg.includes('auth/invalid-email')) {
         msg = 'Please enter a valid email address.';
+      } else if (msg.includes('auth/unauthorized-domain')) {
+        msg = 'Domain not authorized in Firebase Console (Settings > Authorized domains).';
       }
       setErrorMsg(msg);
     } finally {
@@ -79,7 +85,16 @@ export default function AuthModal({
       setSuccessMsg('✓ Signed in with Google! Syncing...');
       setTimeout(() => onClose(), 1000);
     } catch (err) {
-      setErrorMsg(err.message || 'Google sign-in failed.');
+      console.error('[Google Auth Error]', err);
+      let msg = err.message || 'Google sign-in failed.';
+      if (msg.includes('auth/popup-closed-by-user')) {
+        msg = 'Google popup was closed before completing sign-in.';
+      } else if (msg.includes('auth/popup-blocked')) {
+        msg = 'Google popup was blocked by your browser. Please allow popups.';
+      } else if (msg.includes('auth/unauthorized-domain')) {
+        msg = 'Domain not authorized. Please add writyy.onrender.com to Authorized domains in Firebase Console.';
+      }
+      setErrorMsg(msg);
     } finally {
       setIsLoading(false);
     }
