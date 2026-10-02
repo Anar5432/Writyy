@@ -21,21 +21,31 @@ import {
 const CONFIG_STORAGE_KEY = 'writyy_firebase_config';
 
 // Default / fallback Firebase configuration
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCjXg5wiswDB76k-wOevrxkq16Y_7jxiJw",
+  authDomain: "impressive-acolyte-1lxdt.firebaseapp.com",
+  projectId: "impressive-acolyte-1lxdt",
+  storageBucket: "impressive-acolyte-1lxdt.firebasestorage.app",
+  messagingSenderId: "822358393666",
+  appId: "1:822358393666:web:eae8ccb24cfb9ce07d7edb"
+};
+
 export function getFirebaseConfig() {
   try {
     const custom = localStorage.getItem(CONFIG_STORAGE_KEY);
     if (custom) {
-      return JSON.parse(custom);
+      const parsed = JSON.parse(custom);
+      if (parsed && parsed.apiKey && parsed.apiKey.length > 5) return parsed;
     }
   } catch (e) {}
 
   return {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || DEFAULT_FIREBASE_CONFIG.apiKey,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_FIREBASE_CONFIG.authDomain,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_CONFIG.projectId,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || DEFAULT_FIREBASE_CONFIG.storageBucket,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || DEFAULT_FIREBASE_CONFIG.appId
   };
 }
 
