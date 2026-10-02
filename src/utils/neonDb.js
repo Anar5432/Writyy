@@ -4,6 +4,8 @@ import { neon } from '@neondatabase/serverless';
 const STORAGE_URL_KEY = 'writyy_neon_url';
 const STORAGE_SESSION_KEY = 'writyy_neon_session';
 
+const DEFAULT_NEON_URL = 'postgresql://neondb_owner:npg_L9Gj3gmcASvO@ep-wispy-truth-b16e8gbw-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+
 // Retrieve active Neon connection string
 export function getNeonUrl() {
   try {
@@ -13,7 +15,7 @@ export function getNeonUrl() {
     }
   } catch (e) {}
 
-  return import.meta.env.VITE_NEON_DATABASE_URL || '';
+  return import.meta.env.VITE_NEON_DATABASE_URL || DEFAULT_NEON_URL;
 }
 
 export function saveNeonUrl(url) {
