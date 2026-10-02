@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CEFR_LEVELS } from './data/words';
+import { AWL_SUBLISTS, AWL_SUBLIST_INFO, AWL_WORDS } from './data/awlData';
 import { speechService } from './utils/audio';
 import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
@@ -18,7 +19,8 @@ export default function App() {
   // Global State
   const [data, setData] = useState(() => getStoredData());
   const [activeTab, setActiveTab] = useState('study'); // 'study' | 'review' | 'search' | 'stats' | 'add'
-  const [selectedLevel, setSelectedLevel] = useState('IELTS_FOCUS'); // 'ALL', 'A1'..'C1', 'IELTS_FOCUS'
+  const [selectedLevel, setSelectedLevel] = useState('IELTS_FOCUS'); // 'ALL', 'A1'..'C1', 'IELTS_FOCUS', 'AWL'
+  const [selectedAwlSublist, setSelectedAwlSublist] = useState(1); // 1..10 or 'ALL'
   const [audioSpeed, setAudioSpeed] = useState(1.05);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
@@ -315,10 +317,24 @@ export default function App() {
     setTimeout(() => setToastMsg(''), 3000);
   };
 
-  // Initialize/filter Study Queue whenever selectedLevel or data changes
+  // Initialize/filter Study Queue whenever selectedLevel, selectedAwlSublist, or data changes
   useEffect(() => {
     let filtered = [...data.allWords];
-    if (selectedLevel === 'IELTS_FOCUS') {
+    if (selectedLevel === 'AWL') {
+      if (selectedAwlSublist === 'ALL') {
+        filtered = filtered.filter(w => w.awlSublist != null);
+      } else {
+        filtered = filtered.filter(w => w.awlSublist === selectedAwlSublist);
+      }
+      // Deduplicate words in sublists by word text to ensure official headword count
+      const seen = new Set();
+      filtered = filtered.filter(w => {
+        const lower = (w.word || '').toLowerCase();
+        if (seen.has(lower)) return false;
+        seen.add(lower);
+        return true;
+      });
+    } else if (selectedLevel === 'IELTS_FOCUS') {
       filtered = filtered.filter(w => w.level === 'B2' || w.level === 'C1');
     } else if (selectedLevel !== 'ALL') {
       filtered = filtered.filter(w => w.level === selectedLevel);
@@ -332,7 +348,7 @@ export default function App() {
     setQueue(shuffled);
     setCurrentIndex(0);
     resetStudyInputs();
-  }, [selectedLevel, data.allWords.length]);
+  }, [selectedLevel, selectedAwlSublist, data.allWords.length]);
 
   // Review Queue snapshot - refreshed when reviewStackType changes OR when stack data changes
   useEffect(() => {
@@ -733,9 +749,14 @@ export default function App() {
 
   // Filtered Search Results (100% Offline in-memory lookup)
   const filteredSearchResults = data.allWords.filter(item => {
-    const matchesQuery = item.word.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-                         (item.definition && item.definition.toLowerCase().includes(searchQuery.trim().toLowerCase()));
-    const matchesLevel = searchLevel === 'ALL' || item.level === searchLevel;
+    const q = searchQuery.trim().toLowerCase();
+    const matchesQuery = !q || item.word.toLowerCase().includes(q) ||
+                         (item.definition && item.definition.toLowerCase().includes(q));
+    const matchesLevel = searchLevel === 'ALL' 
+      ? true 
+      : searchLevel === 'AWL' 
+        ? item.awlSublist != null 
+        : item.level === searchLevel;
     return matchesQuery && matchesLevel;
   });
 
@@ -884,6 +905,12 @@ export default function App() {
               >
                 ★ IELTS Academic (B2/C1)
               </button>
+              <button 
+                className={`topic-chip awl-chip ${selectedLevel === 'AWL' ? 'active' : ''}`}
+                onClick={() => setSelectedLevel('AWL')}
+              >
+                🎓 AWL Sublists (570)
+              </button>
               {CEFR_LEVELS.map(lvl => (
                 <button 
                   key={lvl}
@@ -901,6 +928,68 @@ export default function App() {
               </button>
             </div>
 
+            {/* AWL Sublist Subwindow / Selector Drawer (The "little window below") */}
+            {selectedLevel === 'AWL' && (
+              <div className="awl-subwindow slide-down">
+                <div className="awl-subwindow-header">
+                  <div className="awl-info-left">
+                    <div className="awl-subwindow-title">
+                      <span className="awl-tag-badge">Averil Coxhead AWL</span>
+                      <span className="awl-subwindow-heading">
+                        {selectedAwlSublist === 'ALL'
+                          ? 'Complete Academic Word List (570 Headwords)'
+                          : `Sublist ${selectedAwlSublist} (${AWL_SUBLIST_INFO[selectedAwlSublist]?.count || (selectedAwlSublist === 10 ? 30 : 60)} Words)`}
+                      </span>
+                    </div>
+                    <p className="awl-subwindow-desc">
+                      {selectedAwlSublist === 'ALL'
+                        ? 'Covering all 10 academic frequency sublists designed for university and IELTS study.'
+                        : AWL_SUBLIST_INFO[selectedAwlSublist]?.description}
+                    </p>
+                  </div>
+
+                  <div className="awl-header-actions">
+                    <button
+                      className="awl-action-btn"
+                      title="Download audio pack for offline use"
+                      onClick={() => {
+                        const wordsToDownload = selectedAwlSublist === 'ALL'
+                          ? data.allWords.filter(w => w.awlSublist != null)
+                          : data.allWords.filter(w => w.awlSublist === selectedAwlSublist);
+                        handleStartDownloadAudio(wordsToDownload);
+                      }}
+                      disabled={isDownloadingAudio}
+                    >
+                      {isDownloadingAudio ? '⏳ Caching...' : '📥 Offline Audio Pack'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sublists 1 through 10 selector pills */}
+                <div className="awl-pills-row">
+                  <button
+                    className={`awl-sub-pill ${selectedAwlSublist === 'ALL' ? 'active' : ''}`}
+                    onClick={() => setSelectedAwlSublist('ALL')}
+                  >
+                    All (570)
+                  </button>
+                  {AWL_SUBLISTS.map(sl => {
+                    const subCount = AWL_SUBLIST_INFO[sl]?.count || (sl === 10 ? 30 : 60);
+                    return (
+                      <button
+                        key={sl}
+                        className={`awl-sub-pill ${selectedAwlSublist === sl ? 'active' : ''}`}
+                        onClick={() => setSelectedAwlSublist(sl)}
+                      >
+                        Sub {sl}
+                        <span className="awl-sub-badge">{subCount}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Core Card: Combines Image 1 Layout + Image 2 Styling */}
             {currentWord ? (
               <div className="editorial-card">
@@ -909,7 +998,9 @@ export default function App() {
                   <div className="academic-badge-row">
                     <span className="card-red-pin"></span>
                     <span className="academic-tier-name">
-                      {currentWord.level} Academic Vocabulary
+                      {currentWord.awlSublist 
+                        ? `AWL Sublist ${currentWord.awlSublist} • Academic Vocabulary` 
+                        : `${currentWord.level} Academic Vocabulary`}
                     </span>
                   </div>
                   <span className="batch-index">
@@ -1163,7 +1254,7 @@ export default function App() {
 
                 {/* Level Filter Chips inside search */}
                 <div className="search-filter-pills">
-                  {['ALL', 'A1', 'A2', 'B1', 'B2', 'C1'].map(lvl => (
+                  {['ALL', 'AWL', 'A1', 'A2', 'B1', 'B2', 'C1'].map(lvl => (
                     <button
                       key={lvl}
                       className={`search-filter-pill ${searchLevel === lvl ? 'active' : ''}`}
@@ -1185,6 +1276,9 @@ export default function App() {
                           <strong className="result-word-heading">{item.word}</strong>
                           <span className="result-phonetic">{item.phonetic}</span>
                           <span className="result-level-badge">{item.level}</span>
+                          {item.awlSublist && (
+                            <span className="result-awl-badge">AWL Sub {item.awlSublist}</span>
+                          )}
                           <span className="result-pos">{item.pos}</span>
                         </div>
                         <button 
@@ -1763,14 +1857,41 @@ export default function App() {
                 <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Fastest (~{Math.round(queue.length * 0.003 * 10) / 10} MB)</span>
               </button>
 
+              {selectedLevel === 'AWL' ? (
+                <button 
+                  className="btn-download-pack" 
+                  onClick={() => {
+                    const wordsToDownload = selectedAwlSublist === 'ALL'
+                      ? data.allWords.filter(w => w.awlSublist != null)
+                      : data.allWords.filter(w => w.awlSublist === selectedAwlSublist);
+                    handleStartDownloadAudio(wordsToDownload);
+                  }}
+                  disabled={isDownloadingAudio}
+                  style={{ background: '#4338ca' }}
+                >
+                  <span>📥 Download AWL {selectedAwlSublist === 'ALL' ? 'Complete (570 Words)' : `Sublist ${selectedAwlSublist} (${queue.length} Words)`}</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Academic Sublist Sound Pack</span>
+                </button>
+              ) : (
+                <button 
+                  className="btn-download-pack" 
+                  onClick={() => handleStartDownloadAudio(data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel))}
+                  disabled={isDownloadingAudio}
+                  style={{ background: '#334155' }}
+                >
+                  <span>📥 Download Level {selectedLevel} Pack ({data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel).length} Words)</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Recommended for current level</span>
+                </button>
+              )}
+
               <button 
                 className="btn-download-pack" 
-                onClick={() => handleStartDownloadAudio(data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel))}
+                onClick={() => handleStartDownloadAudio(data.allWords.filter(w => w.awlSublist != null))}
                 disabled={isDownloadingAudio}
-                style={{ background: '#334155' }}
+                style={{ background: 'linear-gradient(135deg, #4338ca 0%, #312e81 100%)' }}
               >
-                <span>📥 Download Level {selectedLevel} Pack ({data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel).length} Words)</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Recommended for current level</span>
+                <span>🎓 Download Complete AWL 570 Academic Sound Library</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>All 10 Coxhead Sublists (~1.8 MB)</span>
               </button>
 
               <button 

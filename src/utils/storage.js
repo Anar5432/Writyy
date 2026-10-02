@@ -1,6 +1,32 @@
-import { INITIAL_WORDS } from '../data/words';
+import { INITIAL_WORDS } from '../data/words.js';
+import { AWL_WORDS, AWL_MAP } from '../data/awlData.js';
 
 const STORAGE_KEY = 'writyy_app_data_v2'; // Bumped key to load full dictionary
+
+export const ensureAwlEnriched = (wordsList) => {
+  const baseList = Array.isArray(wordsList) && wordsList.length > 0 ? wordsList : INITIAL_WORDS;
+  const existingSet = new Set(baseList.map(w => (w.word || '').toLowerCase()));
+
+  // 1. Tag any existing words with their awlSublist
+  const enriched = baseList.map(w => {
+    if (!w || !w.word) return w;
+    const lower = w.word.toLowerCase();
+    if (AWL_MAP.has(lower) && w.awlSublist !== AWL_MAP.get(lower)) {
+      return { ...w, awlSublist: AWL_MAP.get(lower) };
+    }
+    return w;
+  });
+
+  // 2. Append any supplemental AWL words that are not in baseList
+  const toAppend = [];
+  AWL_WORDS.forEach(aw => {
+    if (!existingSet.has(aw.word.toLowerCase())) {
+      toAppend.push(aw);
+    }
+  });
+
+  return [...enriched, ...toAppend];
+};
 
 export const getStoredData = () => {
   try {
@@ -17,6 +43,8 @@ export const getStoredData = () => {
       const customWords = (words || []).filter(w => w.id && w.id.startsWith('custom_'));
       words = [...customWords, ...INITIAL_WORDS];
     }
+
+    words = ensureAwlEnriched(words);
 
     const merged = {
       allWords: words,
@@ -45,7 +73,7 @@ export const saveStoredData = (data) => {
 
 export const initializeDefaultData = () => {
   const initial = {
-    allWords: INITIAL_WORDS,
+    allWords: ensureAwlEnriched(INITIAL_WORDS),
     stack1_mastered: [],
     stack2_spelling: [],
     stack3_meaning: [],
@@ -59,7 +87,7 @@ export const initializeDefaultData = () => {
 export const resetAllProgress = () => {
   const current = getStoredData();
   const resetData = {
-    allWords: current.allWords || INITIAL_WORDS,
+    allWords: ensureAwlEnriched(current.allWords || INITIAL_WORDS),
     stack1_mastered: [],
     stack2_spelling: [],
     stack3_meaning: [],
@@ -69,3 +97,4 @@ export const resetAllProgress = () => {
   saveStoredData(resetData);
   return resetData;
 };
+

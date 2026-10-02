@@ -1254,12 +1254,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_124",
-    "word": "compensation",
-    "phonetic": "/ˌkɒmpenˈseɪʃn/",
-    "pos": "noun",
+    "word": "compensate",
+    "phonetic": "/ˈkɒmpenseɪt/",
+    "pos": "verb",
     "level": "C1",
-    "definition": "something, especially money, that somebody gives you because they have hurt you, or damaged something that you own; the act of giving this to somebody",
-    "example": "to claim/award/receive compensation",
+    "definition": "to provide something good to balance or reduce the bad effects of damage, loss, etc.",
+    "example": "Nothing can compensate for the loss of a loved one.",
     "awlSublist": 3
   },
   {
@@ -1304,42 +1304,42 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_129",
-    "word": "constraint",
-    "phonetic": "/kənˈstreɪnt/",
-    "pos": "noun",
-    "level": "C1",
-    "definition": "a thing that limits something, or limits your freedom to do something",
-    "example": "constraints of time/money/space",
+    "word": "constrain",
+    "phonetic": "/kənˈstreɪn/",
+    "pos": "verb",
+    "level": "B2",
+    "definition": "to compel, restrict severely, or limit",
+    "example": "Budgetary limits constrain the scope of new educational programs.",
     "awlSublist": 3
   },
   {
     "id": "awl_130",
-    "word": "contribution",
-    "phonetic": "/ˌkɒntrɪˈbjuːʃn/",
-    "pos": "noun",
+    "word": "contribute",
+    "phonetic": "/kənˈtrɪbjuːt/",
+    "pos": "verb",
     "level": "B2",
-    "definition": "a gift or payment that is made to a person or an organization in order to help pay for something",
-    "example": "All contributions will be gratefully received.",
+    "definition": "to give something, especially money or goods, to help achieve or provide something",
+    "example": "Do you wish to contribute?",
     "awlSublist": 3
   },
   {
     "id": "awl_131",
-    "word": "convention",
-    "phonetic": "/kənˈvenʃn/",
-    "pos": "noun",
-    "level": "B2",
-    "definition": "the way in which something is done that most people in a society expect and consider to be polite or the right way to do it",
-    "example": "the rigid social conventions of Victorian Britain",
+    "word": "convene",
+    "phonetic": "/kənˈviːn/",
+    "pos": "verb",
+    "level": "C1",
+    "definition": "to come together or call people together for an official meeting",
+    "example": "The committee will convene next week to review the evidence.",
     "awlSublist": 3
   },
   {
     "id": "awl_132",
-    "word": "coordination",
-    "phonetic": "/kəʊˌɔːdɪˈneɪʃn/",
-    "pos": "noun",
+    "word": "coordinate",
+    "phonetic": "/kəʊˈɔːdɪneɪt/",
+    "pos": "verb",
     "level": "C1",
-    "definition": "the act of making parts of something, groups of people, etc. work together in an efficient and organized way",
-    "example": "The aim was to improve the coordination of services.",
+    "definition": "to organize the different parts of an activity and the people involved in it so that it works well",
+    "example": "coordinate something, They appointed a new manager to coordinate the work of the team.",
     "awlSublist": 3
   },
   {
@@ -1384,12 +1384,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_137",
-    "word": "deduction",
-    "phonetic": "/dɪˈdʌkʃn/",
-    "pos": "noun",
+    "word": "deduce",
+    "phonetic": "/dɪˈdjuːs/",
+    "pos": "verb",
     "level": "B2",
-    "definition": "the process of reasoning from statements to reach a logical conclusion; or subtracting an amount",
-    "example": "Logical deduction led the scientists to the correct conclusion.",
+    "definition": "to reach a conclusion based on available facts or premises",
+    "example": "From the given evidence, detectives could deduce what had happened.",
     "awlSublist": 3
   },
   {
@@ -1414,12 +1414,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_140",
-    "word": "dominant",
-    "phonetic": "/ˈdɒmɪnənt/",
-    "pos": "adjective",
+    "word": "dominate",
+    "phonetic": "/ˈdɒmɪneɪt/",
+    "pos": "verb",
     "level": "B2",
-    "definition": "more important, powerful or easy to notice than other things",
-    "example": "The firm has achieved a dominant position in the world market.",
+    "definition": "to control or have a lot of influence over somebody/something, especially in an unpleasant way",
+    "example": "She always says a lot in meetings, but she doesn't dominate.",
     "awlSublist": 3
   },
   {
@@ -1484,12 +1484,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_147",
-    "word": "immigration",
-    "phonetic": "/ˌɪmɪˈɡreɪʃn/",
-    "pos": "noun",
-    "level": "B2",
-    "definition": "the process of coming to live permanently in a different country from the one you were born in; the number of people who do this",
-    "example": "legal/illegal immigration",
+    "word": "immigrate",
+    "phonetic": "/ˈɪmɪɡreɪt/",
+    "pos": "verb",
+    "level": "B1",
+    "definition": "to come to live permanently in a foreign country",
+    "example": "His family chose to immigrate to Canada in search of better opportunities.",
     "awlSublist": 3
   },
   {
@@ -1524,22 +1524,22 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_151",
-    "word": "interaction",
-    "phonetic": "/ˌɪntərˈækʃn/",
-    "pos": "noun",
+    "word": "interact",
+    "phonetic": "/ˌɪntərˈækt/",
+    "pos": "verb",
     "level": "B2",
-    "definition": "the act of communicating with somebody, especially while you work, play or spend time with them",
-    "example": "the interaction between performers and their audience",
+    "definition": "to communicate with somebody, especially while you work, play or spend time with them",
+    "example": "Teachers have a limited amount of time to interact with each child.",
     "awlSublist": 3
   },
   {
     "id": "awl_152",
-    "word": "justification",
-    "phonetic": "/ˌdʒʌstɪfɪˈkeɪʃn/",
-    "pos": "noun",
-    "level": "C1",
-    "definition": "a good reason why something exists or is done",
-    "example": "justification for doing something, I can see no possible justification for any further tax increases.",
+    "word": "justify",
+    "phonetic": "/ˈdʒʌstɪfaɪ/",
+    "pos": "verb",
+    "level": "B2",
+    "definition": "to show that somebody/something is right or reasonable",
+    "example": "justify doing something, How can they justify paying such huge salaries?",
     "awlSublist": 3
   },
   {
@@ -1564,42 +1564,42 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_155",
-    "word": "location",
-    "phonetic": "/ləʊˈkeɪʃn/",
-    "pos": "noun",
+    "word": "locate",
+    "phonetic": "/ləʊˈkeɪt/",
+    "pos": "verb",
     "level": "B1",
-    "definition": "a place where something happens or exists; the position of something",
-    "example": "a honeymoon in a secret location",
+    "definition": "to find the exact position of somebody/something",
+    "example": "The mechanic located the fault immediately.",
     "awlSublist": 3
   },
   {
     "id": "awl_156",
-    "word": "maximum",
-    "phonetic": "/ˈmæksɪməm/",
-    "pos": "noun",
-    "level": "B2",
-    "definition": "the greatest amount, size, speed, etc. that is possible, recorded or allowed",
-    "example": "a maximum of 30 children in a class",
+    "word": "maximize",
+    "phonetic": "/ˈmæksɪmaɪz/",
+    "pos": "verb",
+    "level": "C1",
+    "definition": "to increase something as much as possible",
+    "example": "to maximize efficiency/fitness/profits",
     "awlSublist": 3
   },
   {
     "id": "awl_157",
-    "word": "minority",
-    "phonetic": "/maɪˈnɒrəti/",
-    "pos": "noun",
+    "word": "minor",
+    "phonetic": "/ˈmaɪnə(r)/",
+    "pos": "adjective",
     "level": "B2",
-    "definition": "the smaller part of a group; less than half of the people or things in a large group",
-    "example": "Only a small minority of students is/are interested in politics these days.",
+    "definition": "not very large, important or serious",
+    "example": "The new plan involves widening a minor road through the valley.",
     "awlSublist": 3
   },
   {
     "id": "awl_158",
-    "word": "negative",
-    "phonetic": "/ˈneɡətɪv/",
-    "pos": "noun",
-    "level": "B2",
-    "definition": "a word or statement that means ‘no’; an act of refusing to do something or of denying something",
-    "example": "in the negative, She answered in the negative (= said ‘no’).",
+    "word": "negate",
+    "phonetic": "/nɪˈɡeɪt/",
+    "pos": "verb",
+    "level": "C1",
+    "definition": "to nullify, make ineffective, or deny the existence of something",
+    "example": "The latest findings do not negate the results of previous studies.",
     "awlSublist": 3
   },
   {
@@ -1614,12 +1614,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_160",
-    "word": "partnership",
-    "phonetic": "/ˈpɑːtnəʃɪp/",
+    "word": "partner",
+    "phonetic": "/ˈpɑːtnə(r)/",
     "pos": "noun",
-    "level": "B2",
-    "definition": "the state of being a partner in business",
-    "example": "to be in/to go into partnership",
+    "level": "A1",
+    "definition": "a person that you are doing an activity with, such as dancing or playing a game",
+    "example": "a dance/tennis partner",
     "awlSublist": 3
   },
   {
@@ -1664,12 +1664,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_165",
-    "word": "reaction",
-    "phonetic": "/riˈækʃn/",
-    "pos": "noun",
-    "level": "B1",
-    "definition": "what you do, say or think as a result of something that has happened",
-    "example": "to provoke/cause/get a reaction",
+    "word": "react",
+    "phonetic": "/riˈækt/",
+    "pos": "verb",
+    "level": "A2",
+    "definition": "to change or behave in a particular way as a result of or in response to something",
+    "example": "I nudged her but she didn't react.",
     "awlSublist": 3
   },
   {
@@ -1684,12 +1684,12 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_167",
-    "word": "reliance",
-    "phonetic": "/rɪˈlaɪəns/",
-    "pos": "noun",
-    "level": "C1",
-    "definition": "the state of depending on or trusting in someone or something",
-    "example": "Heavy reliance on fossil fuels increases vulnerability to price spikes.",
+    "word": "rely",
+    "phonetic": "/rɪˈlaɪ/",
+    "pos": "verb",
+    "level": "B2",
+    "definition": "Key academic vocabulary word.",
+    "example": "",
     "awlSublist": 3
   },
   {
@@ -1764,22 +1764,22 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_175",
-    "word": "sum",
-    "phonetic": "/sʌm/",
-    "pos": "verb",
-    "level": "B2",
-    "definition": "Key academic vocabulary word.",
-    "example": "",
-    "awlSublist": 3
-  },
-  {
-    "id": "awl_176",
     "word": "task",
     "phonetic": "/tɑːsk/",
     "pos": "noun",
     "level": "A2",
     "definition": "a piece of work that somebody has to do, especially a hard or unpleasant one",
     "example": "to accomplish/perform/undertake/complete a task",
+    "awlSublist": 3
+  },
+  {
+    "id": "awl_176",
+    "word": "technical",
+    "phonetic": "/ˈteknɪkl/",
+    "pos": "adjective",
+    "level": "B1",
+    "definition": "connected with the practical use of machines, methods, etc. in science and industry",
+    "example": "We offer free technical support for those buying our software.",
     "awlSublist": 3
   },
   {
@@ -2098,8 +2098,8 @@ export const AWL_WORDS = [
     "phonetic": "/ˈɪmplɪkeɪt/",
     "pos": "verb",
     "level": "C1",
-    "definition": "to show or suggest that someone or something is involved in a crime or process",
-    "example": "New evidence implicated the compound in the acceleration of aging.",
+    "definition": "to show or suggest that someone or something is involved in an event or crime",
+    "example": "New evidence implicated the compound in cellular aging.",
     "awlSublist": 4
   },
   {
@@ -2828,8 +2828,8 @@ export const AWL_WORDS = [
     "phonetic": "/ˈɔːriənt/",
     "pos": "verb",
     "level": "B2",
-    "definition": "to align or position something relative to specific goals or points of reference",
-    "example": "The curriculum is designed to orient students toward scientific research.",
+    "definition": "to align or position something relative to specific goals or directions",
+    "example": "The seminar aims to orient researchers toward practical applications.",
     "awlSublist": 5
   },
   {
@@ -3058,7 +3058,7 @@ export const AWL_WORDS = [
     "phonetic": "/ˈæɡrɪɡət/",
     "pos": "noun/adjective",
     "level": "C1",
-    "definition": "formed or calculated by the combination of many separate units or items",
+    "definition": "formed or calculated by the combination of many separate units",
     "example": "The aggregate demand for goods has risen over the past quarter.",
     "awlSublist": 6
   },
@@ -3158,7 +3158,7 @@ export const AWL_WORDS = [
     "phonetic": "/dɪˈskrɪmɪneɪt/",
     "pos": "verb",
     "level": "B2",
-    "definition": "to recognize a distinction or differentiate between things; or treat unfairly",
+    "definition": "to recognize a distinction between things; or make unjust distinctions against people",
     "example": "The sensor can discriminate between subtle variations in temperature.",
     "awlSublist": 6
   },
@@ -4194,16 +4194,6 @@ export const AWL_WORDS = [
   },
   {
     "id": "awl_418",
-    "word": "undergo",
-    "phonetic": "/ˌʌndəˈɡəʊ/",
-    "pos": "verb",
-    "level": "B2",
-    "definition": "to experience something, especially a change or something unpleasant",
-    "example": "to undergo tests/trials/repairs",
-    "awlSublist": 7
-  },
-  {
-    "id": "awl_419",
     "word": "unique",
     "phonetic": "/juˈniːk/",
     "pos": "adjective",
@@ -4213,13 +4203,23 @@ export const AWL_WORDS = [
     "awlSublist": 7
   },
   {
-    "id": "awl_420",
+    "id": "awl_419",
     "word": "visible",
     "phonetic": "/ˈvɪzəbl/",
     "pos": "adjective",
     "level": "B2",
     "definition": "that can be seen",
     "example": "The house is clearly visible from the beach.",
+    "awlSublist": 7
+  },
+  {
+    "id": "awl_420",
+    "word": "voluntary",
+    "phonetic": "/ˈvɒləntri/",
+    "pos": "adjective",
+    "level": "B2",
+    "definition": "done willingly, not because you are forced",
+    "example": "a voluntary agreement",
     "awlSublist": 7
   },
   {
@@ -4425,7 +4425,7 @@ export const AWL_WORDS = [
   {
     "id": "awl_441",
     "word": "deviate",
-    "phonetic": "/ˈdiːvieɪt/ ",
+    "phonetic": "/ˈdiːvieɪt/",
     "pos": "verb",
     "level": "C1",
     "definition": "to depart from an established course, norm, or standard",
