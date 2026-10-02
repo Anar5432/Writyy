@@ -7,6 +7,7 @@ import {
   saveNeonUrl, 
   isNeonConfigured 
 } from '../utils/neonDb';
+import { getStoredData } from '../utils/storage';
 
 export default function AuthModal({ 
   isOpen, 
@@ -46,9 +47,10 @@ export default function AuthModal({
         if (password.length < 6) {
           throw new Error('Password must be at least 6 characters.');
         }
-        const user = await signUpWithEmail(email, password, displayName);
-        setSuccessMsg('🎉 Account created! Connected to Neon Cloud Database.');
-        if (onUserAuthChange) onUserAuthChange(user, null);
+        const localData = getStoredData();
+        const res = await signUpWithEmail(email, password, displayName, localData);
+        setSuccessMsg(res.autoLoggedIn ? '✓ Connected to your existing account! Syncing vocabulary...' : '🎉 Account created! Connected to Neon Cloud Database.');
+        if (onUserAuthChange) onUserAuthChange(res.user, res.data);
         setTimeout(() => onClose(), 800);
       }
     } catch (err) {

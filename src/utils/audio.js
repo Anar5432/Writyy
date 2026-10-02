@@ -182,13 +182,21 @@ class SpeechService {
     }
 
     let errorHandled = false;
+    let playTimeout = null;
+
     const triggerErrorOnce = () => {
       if (errorHandled) return;
       errorHandled = true;
+      if (playTimeout) clearTimeout(playTimeout);
       if (this.currentPlayToken === token && onError) {
         onError();
       }
     };
+
+    // Stalled / slow network safety fallback for mobile
+    playTimeout = setTimeout(() => {
+      triggerErrorOnce();
+    }, 1400);
 
     try {
       this.audioPlayer.pause();
@@ -198,18 +206,21 @@ class SpeechService {
       this.audioPlayer.playbackRate = this.rate || 1.05;
 
       this.audioPlayer.onplay = () => {
+        if (playTimeout) clearTimeout(playTimeout);
         if (this.currentPlayToken === token) {
           onStart();
         }
       };
 
       this.audioPlayer.onended = () => {
+        if (playTimeout) clearTimeout(playTimeout);
         if (this.currentPlayToken === token) {
           onEnd();
         }
       };
 
       this.audioPlayer.onerror = (e) => {
+        if (playTimeout) clearTimeout(playTimeout);
         triggerErrorOnce();
       };
 

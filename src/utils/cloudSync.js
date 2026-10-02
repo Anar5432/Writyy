@@ -86,8 +86,14 @@ export function mergeCloudAndLocal(localData, cloudData) {
   );
 
   const mergedMastered = mergeWordLists(localData.stack1_mastered, cloudData.stack1_mastered);
-  const mergedSpelling = mergeWordLists(localData.stack2_spelling, cloudData.stack2_spelling);
-  const mergedMeaning = mergeWordLists(localData.stack3_meaning, cloudData.stack3_meaning);
+  const rawSpelling = mergeWordLists(localData.stack2_spelling, cloudData.stack2_spelling);
+  const rawMeaning = mergeWordLists(localData.stack3_meaning, cloudData.stack3_meaning);
+
+  // Clean deduplication across stacks: Mastered (Stack 1) takes precedence
+  const masteredIds = new Set(mergedMastered.map(w => w.id || w.word));
+  const mergedSpelling = rawSpelling.filter(w => !masteredIds.has(w.id || w.word));
+  const spellingIds = new Set(mergedSpelling.map(w => w.id || w.word));
+  const mergedMeaning = rawMeaning.filter(w => !masteredIds.has(w.id || w.word) && !spellingIds.has(w.id || w.word));
 
   // Take the highest stats
   const localTested = (localData.stats && localData.stats.totalTested) || 0;

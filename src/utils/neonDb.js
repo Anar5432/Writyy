@@ -75,7 +75,7 @@ async function hashPassword(password) {
 }
 
 // Account Registration
-export async function signUpWithEmail(email, password, displayName = '') {
+export async function signUpWithEmail(email, password, displayName = '', existingData = null) {
   const sql = getSql();
   if (!sql) {
     throw new Error('Neon database is not configured. Please paste your Neon Connection String in Settings.');
@@ -88,33 +88,54 @@ export async function signUpWithEmail(email, password, displayName = '') {
 
   // Check existing user
   const existing = await sql`
-    SELECT email FROM writyy_users WHERE LOWER(email) = ${cleanEmail} LIMIT 1
+    SELECT email, password_hash, data FROM writyy_users WHERE LOWER(email) = ${cleanEmail} LIMIT 1
   `;
   if (existing && existing.length > 0) {
-    throw new Error('An account with this email already exists. Please Sign In.');
+    if (existing[0].password_hash === hash) {
+      // Existing user with correct password: auto-login seamlessly!
+      const userData = existing[0].data || {};
+      const userSession = {
+        email: cleanEmail,
+        displayName: userData.displayName || cleanEmail.split('@')[0]
+      };
+      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+      return { user: userSession, data: userData, autoLoggedIn: true };
+    } else {
+      throw new Error('An account with this email already exists. Please enter your password and click "Sign In".');
+    }
   }
 
-  const initialData = {
+  const payloadData = existingData ? {
+    displayName: displayName.trim() || cleanEmail.split('@')[0],
+    stack1_mastered: existingData.stack1_mastered || [],
+    stack2_spelling: existingData.stack2_spelling || [],
+    stack3_meaning: existingData.stack3_meaning || [],
+    customWords: (existingData.allWords || []).filter(w => w.id && w.id.startsWith('custom_')),
+    stats: existingData.stats || { totalTested: 0, correctSpelling: 0 },
+    history: (existingData.history || []).slice(-100),
+    lastUpdated: new Date().toISOString()
+  } : {
     displayName: displayName.trim() || cleanEmail.split('@')[0],
     stack1_mastered: [],
     stack2_spelling: [],
     stack3_meaning: [],
     customWords: [],
     stats: { totalTested: 0, correctSpelling: 0 },
-    history: []
+    history: [],
+    lastUpdated: new Date().toISOString()
   };
 
   await sql`
     INSERT INTO writyy_users (email, password_hash, data) 
-    VALUES (${cleanEmail}, ${hash}, ${JSON.stringify(initialData)}::jsonb)
+    VALUES (${cleanEmail}, ${hash}, ${JSON.stringify(payloadData)}::jsonb)
   `;
 
   const userSession = {
     email: cleanEmail,
-    displayName: initialData.displayName
+    displayName: payloadData.displayName
   };
   localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
-  return userSession;
+  return { user: userSession, data: payloadData, autoLoggedIn: false };
 }
 
 // Account Login
