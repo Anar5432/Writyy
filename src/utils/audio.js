@@ -60,6 +60,28 @@ class SpeechService {
     this.selectedVoice = neutralUsVoice || fallbackEnVoice;
   }
 
+  unlockAudio() {
+    this.initVoices();
+    if (this.audioPlayer) {
+      try {
+        this.audioPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        this.audioPlayer.load();
+        const p = this.audioPlayer.play();
+        if (p) p.then(() => this.audioPlayer.pause()).catch(() => {});
+      } catch (e) {}
+    }
+    if (this.synth) {
+      try {
+        if (this.synth.paused) {
+          this.synth.resume();
+        }
+        const dummy = new SpeechSynthesisUtterance('');
+        dummy.volume = 0.01;
+        this.synth.speak(dummy);
+      } catch (e) {}
+    }
+  }
+
   setRate(newRate) {
     this.rate = Math.max(0.6, Math.min(1.4, newRate));
     if (this.audioPlayer) {
@@ -129,25 +151,27 @@ class SpeechService {
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
     if (isOnline && this.audioPlayer) {
-      // Primary: Google TTS US (fastest global CDN, ~250ms latency, standard American neutral voice)
-      const primaryUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
-      // Fallback: Youdao standard neutral dictionary recording
-      const fallbackUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+      // Primary: Youdao standard neutral US dictionary recording (rock-solid on mobile networks worldwide)
+      const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+      // Secondary: Google TTS US
+      const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+      // Tertiary: Google dictionary static recordings
+      const gstaticUrl = `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${cleanWord}--_us_1.mp3`;
 
       // In background, fetch blob and cache to IndexedDB for permanent offline use
       fetchWordAudioBlob(cleanWord).catch(() => {});
 
-      this.playHtmlAudio(primaryUrl, token, handleStart, handleEnd, () => {
+      this.playHtmlAudio(youdaoUrl, token, handleStart, handleEnd, () => {
         if (this.currentPlayToken !== token) return;
-        // Fallback to dictionary recording
-        this.playHtmlAudio(fallbackUrl, token, handleStart, handleEnd, () => {
+        this.playHtmlAudio(googleUrl, token, handleStart, handleEnd, () => {
           if (this.currentPlayToken !== token) return;
-          // Absolute offline/failure fallback to SpeechSynthesis
-          this.speakWithSynthesis(cleanWord, token, handleStart, handleEnd);
+          this.playHtmlAudio(gstaticUrl, token, handleStart, handleEnd, () => {
+            if (this.currentPlayToken !== token) return;
+            this.speakWithSynthesis(cleanWord, token, handleStart, handleEnd);
+          });
         });
       });
     } else {
-      // Device is offline and word not yet cached: use local speech synthesis with neutral US voice
       this.speakWithSynthesis(cleanWord, token, handleStart, handleEnd);
     }
   }
@@ -170,7 +194,8 @@ class SpeechService {
       this.audioPlayer.pause();
       this.audioPlayer.currentTime = 0;
       this.audioPlayer.src = url;
-      this.audioPlayer.playbackRate = this.rate || 0.92;
+      this.audioPlayer.load(); // CRITICAL for mobile Safari & Android Chrome
+      this.audioPlayer.playbackRate = this.rate || 1.05;
 
       this.audioPlayer.onplay = () => {
         if (this.currentPlayToken === token) {
@@ -191,7 +216,6 @@ class SpeechService {
       const playPromise = this.audioPlayer.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
-          // If the play was aborted/interrupted by a newer sound call, DO NOT trigger error fallback!
           if (err && err.name === 'AbortError') {
             return;
           }
@@ -212,10 +236,13 @@ class SpeechService {
     }
 
     try {
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
       this.synth.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = this.rate || 0.92;
+      utterance.rate = this.rate || 1.0;
       utterance.pitch = this.pitch || 1.0;
       utterance.lang = 'en-US';
 

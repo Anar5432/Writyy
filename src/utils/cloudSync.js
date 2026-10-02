@@ -96,12 +96,18 @@ export function mergeCloudAndLocal(localData, cloudData) {
   const mergeWordLists = (localList = [], cloudList = []) => {
     const map = new Map();
     // Add local items
-    for (const item of localList) {
-      if (item && item.id) map.set(item.id, item);
+    for (const item of (localList || [])) {
+      if (item) {
+        const key = item.id || item.word;
+        if (key) map.set(key, item);
+      }
     }
     // Add/merge cloud items
-    for (const item of cloudList) {
-      if (item && item.id) map.set(item.id, item);
+    for (const item of (cloudList || [])) {
+      if (item) {
+        const key = item.id || item.word;
+        if (key) map.set(key, item);
+      }
     }
     return Array.from(map.values());
   };

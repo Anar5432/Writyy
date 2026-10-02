@@ -231,28 +231,30 @@ export default function App() {
         try {
           // 1. Fetch remote progress from cloud
           const cloudData = await fetchProgressFromCloud(user.uid);
+          const currentLocal = getStoredData();
+
           if (cloudData) {
-            setData(prev => {
-              const merged = mergeCloudAndLocal(prev, cloudData);
-              // Push merged state back to cloud to guarantee local words are saved
-              pushProgressToCloud(user.uid, merged);
-              return merged;
-            });
+            const merged = mergeCloudAndLocal(currentLocal, cloudData);
+            setData(merged);
+            saveStoredData(merged);
+            // Push merged state back to cloud to guarantee local words are saved
+            await pushProgressToCloud(user.uid, merged);
             setLastSyncTime(new Date());
-            showToast('☁️ Vocabulary synced with Cloud!');
+            showToast('☁️ Progress synced with Cloud!');
           } else {
             // New user cloud doc: push existing local vocabulary
-            setData(currentLocal => {
-              pushProgressToCloud(user.uid, currentLocal);
-              return currentLocal;
-            });
+            await pushProgressToCloud(user.uid, currentLocal);
             setLastSyncTime(new Date());
           }
 
-          // 2. Set up real-time listener for remote changes (e.g. from phone or another tab)
+          // 2. Set up real-time listener for remote changes (e.g. from laptop or phone)
           unsubscribeSnapshot = subscribeToCloudProgress(user.uid, (remoteData) => {
             if (remoteData) {
-              setData(prev => mergeCloudAndLocal(prev, remoteData));
+              setData(prev => {
+                const merged = mergeCloudAndLocal(prev, remoteData);
+                saveStoredData(merged);
+                return merged;
+              });
               setLastSyncTime(new Date());
             }
           });
@@ -283,13 +285,25 @@ export default function App() {
     }
     setIsSyncing(true);
     showToast('☁️ Syncing with Cloud...');
-    const success = await pushProgressToCloud(currentUser.uid, data);
-    setIsSyncing(false);
-    if (success) {
-      setLastSyncTime(new Date());
-      showToast('✓ Cloud sync complete!');
-    } else {
-      showToast('⚠️ Sync failed. Check network connection.');
+    try {
+      const cloudData = await fetchProgressFromCloud(currentUser.uid);
+      const currentLocal = getStoredData();
+      const merged = mergeCloudAndLocal(currentLocal, cloudData);
+
+      saveStoredData(merged);
+      setData(merged);
+
+      const success = await pushProgressToCloud(currentUser.uid, merged);
+      setIsSyncing(false);
+      if (success) {
+        setLastSyncTime(new Date());
+        showToast('✓ Cloud sync complete! (All words synced)');
+      } else {
+        showToast('⚠️ Sync failed. Check network connection.');
+      }
+    } catch (err) {
+      setIsSyncing(false);
+      showToast('⚠️ Sync error: ' + (err.message || 'Check network'));
     }
   };
 
@@ -323,15 +337,15 @@ export default function App() {
     resetStudyInputs();
   }, [selectedLevel, data.allWords.length]);
 
-  // Review Queue snapshot - only refreshed when reviewStackType changes or explicitly opened
+  // Review Queue snapshot - refreshed when reviewStackType changes OR when stack data changes
   useEffect(() => {
     if (activeTab === 'review') {
       const list = reviewStackType === 'stack2' ? data.stack2_spelling : data.stack3_meaning;
       setReviewQueue([...list]);
-      setReviewIndex(0);
+      setReviewIndex(prev => (prev >= list.length ? 0 : prev));
       resetReviewInputs();
     }
-  }, [reviewStackType, activeTab]);
+  }, [reviewStackType, activeTab, data.stack2_spelling, data.stack3_meaning]);
 
   const currentWord = queue[currentIndex];
   const currentReviewWord = reviewQueue[reviewIndex];
@@ -404,15 +418,19 @@ export default function App() {
   // Unlock mobile audio context upon first interaction
   useEffect(() => {
     const handleFirstTouch = () => {
-      speechService.initVoices();
+      speechService.unlockAudio();
+      sfx.getContext();
       window.removeEventListener('touchstart', handleFirstTouch);
       window.removeEventListener('click', handleFirstTouch);
+      window.removeEventListener('pointerdown', handleFirstTouch);
     };
     window.addEventListener('touchstart', handleFirstTouch, { passive: true });
     window.addEventListener('click', handleFirstTouch, { passive: true });
+    window.addEventListener('pointerdown', handleFirstTouch, { passive: true });
     return () => {
       window.removeEventListener('touchstart', handleFirstTouch);
       window.removeEventListener('click', handleFirstTouch);
+      window.removeEventListener('pointerdown', handleFirstTouch);
     };
   }, []);
 
