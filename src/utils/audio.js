@@ -75,7 +75,7 @@ class SpeechService {
         if (this.synth.paused) {
           this.synth.resume();
         }
-        const dummy = new SpeechSynthesisUtterance('');
+        const dummy = new SpeechSynthesisUtterance(' ');
         dummy.volume = 0.01;
         this.synth.speak(dummy);
       } catch (e) {}
@@ -148,18 +148,17 @@ class SpeechService {
   playOnlineOrSynthesize(cleanWord, token, handleStart, handleEnd) {
     if (this.currentPlayToken !== token) return;
 
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-
-    if (isOnline && this.audioPlayer) {
-      // Primary: Youdao standard neutral US dictionary recording (rock-solid on mobile networks worldwide)
+    if (this.audioPlayer) {
+      // Primary: Youdao standard neutral US dictionary recording
+      // NOTE: Service Worker caches this in 'writyy-audio-v1' so it plays 100% OFFLINE from cache!
       const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
-      // Secondary: Google TTS US
       const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
-      // Tertiary: Google dictionary static recordings
       const gstaticUrl = `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${cleanWord}--_us_1.mp3`;
 
-      // In background, fetch blob and cache to IndexedDB for permanent offline use
-      fetchWordAudioBlob(cleanWord).catch(() => {});
+      // Pre-cache in background if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        fetchWordAudioBlob(cleanWord).catch(() => {});
+      }
 
       this.playHtmlAudio(youdaoUrl, token, handleStart, handleEnd, () => {
         if (this.currentPlayToken !== token) return;
@@ -193,7 +192,7 @@ class SpeechService {
       }
     };
 
-    // Stalled / slow network safety fallback for mobile
+    // Stalled / slow network safety fallback for mobile (1.4s)
     playTimeout = setTimeout(() => {
       triggerErrorOnce();
     }, 1400);
@@ -202,7 +201,6 @@ class SpeechService {
       this.audioPlayer.pause();
       this.audioPlayer.currentTime = 0;
       this.audioPlayer.src = url;
-      this.audioPlayer.load(); // CRITICAL for mobile Safari & Android Chrome
       this.audioPlayer.playbackRate = this.rate || 1.05;
 
       this.audioPlayer.onplay = () => {
@@ -250,12 +248,16 @@ class SpeechService {
       if (this.synth.paused) {
         this.synth.resume();
       }
-      this.synth.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
+      this.activeUtterance = utterance; // Prevent GC bug on iOS / Android!
       utterance.rate = this.rate || 1.0;
       utterance.pitch = this.pitch || 1.0;
       utterance.lang = 'en-US';
+
+      if (!this.selectedVoice) {
+        this.initVoices();
+      }
 
       if (this.selectedVoice) {
         utterance.voice = this.selectedVoice;
@@ -269,15 +271,18 @@ class SpeechService {
       };
 
       utterance.onend = () => {
+        this.activeUtterance = null;
         if (this.currentPlayToken === token && onEnd) onEnd();
       };
 
-      utterance.onerror = () => {
+      utterance.onerror = (e) => {
+        this.activeUtterance = null;
         if (this.currentPlayToken === token && onEnd) onEnd();
       };
 
       this.synth.speak(utterance);
     } catch (err) {
+      this.activeUtterance = null;
       console.warn('Speech synthesis error:', err);
       if (onEnd) onEnd();
     }

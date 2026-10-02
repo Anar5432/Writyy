@@ -246,6 +246,34 @@ export default function App() {
     }
   }, [currentUser?.email]);
 
+  // Auto-sync offline progress when phone reconnects to internet
+  useEffect(() => {
+    const handleOnline = async () => {
+      console.log('[App] Network reconnected! Auto-syncing offline progress...');
+      showToast('📶 Back online! Syncing progress to Neon cloud...');
+      if (currentUser) {
+        setIsSyncing(true);
+        try {
+          const currentLocal = getStoredData();
+          const cloudData = await fetchProgressFromCloud(currentUser);
+          const merged = mergeCloudAndLocal(currentLocal, cloudData);
+          setData(merged);
+          saveStoredData(merged);
+          await pushProgressToCloud(currentUser, merged);
+          setLastSyncTime(new Date());
+          showToast('✓ Synced with Neon Cloud Database!');
+        } catch (err) {
+          console.warn('[Auto-sync error]', err);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [currentUser]);
+
   // Force manual cloud synchronization with Neon
   const handleForceSyncWithCloud = async () => {
     if (!currentUser) {
@@ -324,6 +352,10 @@ export default function App() {
     const target = wordToSpeak || (activeTab === 'review' ? (currentReviewWord ? currentReviewWord.word : '') : (currentWord ? currentWord.word : ''));
     if (!target) return;
 
+    if (speechService.synth && speechService.synth.paused) {
+      try { speechService.synth.resume(); } catch (e) {}
+    }
+
     speechService.speak(
       target,
       () => setIsPlayingAudio(true),
@@ -384,11 +416,24 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, submitted, reviewSubmitted, currentIndex, reviewIndex, queue.length, reviewQueue.length]);
 
-  // Unlock mobile audio context upon first interaction
+  // Unlock mobile audio context upon first interaction and play waiting card
   useEffect(() => {
+    let triggered = false;
     const handleFirstTouch = () => {
+      if (triggered) return;
+      triggered = true;
       speechService.unlockAudio();
       sfx.getContext();
+
+      // If opening offline or fresh, play the word currently visible on screen
+      setTimeout(() => {
+        if (activeTab === 'study' && queue[currentIndex] && !submitted) {
+          playCurrentAudio(queue[currentIndex].word);
+        } else if (activeTab === 'review' && reviewQueue[reviewIndex] && !reviewSubmitted) {
+          playCurrentAudio(reviewQueue[reviewIndex].word);
+        }
+      }, 100);
+
       window.removeEventListener('touchstart', handleFirstTouch);
       window.removeEventListener('click', handleFirstTouch);
       window.removeEventListener('pointerdown', handleFirstTouch);
@@ -401,7 +446,7 @@ export default function App() {
       window.removeEventListener('click', handleFirstTouch);
       window.removeEventListener('pointerdown', handleFirstTouch);
     };
-  }, []);
+  }, [activeTab, currentIndex, reviewIndex, queue, reviewQueue, submitted, reviewSubmitted]);
 
   const resetStudyInputs = () => {
     setUserInput('');
@@ -1711,21 +1756,31 @@ export default function App() {
             <div className="audio-download-row">
               <button 
                 className="btn-download-pack" 
-                onClick={() => handleStartDownloadAudio(queue.slice(0, 50))}
+                onClick={() => handleStartDownloadAudio(queue)}
                 disabled={isDownloadingAudio}
               >
-                <span>📥 Download Current Deck ({Math.min(queue.length, 50)} Words)</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>~0.5 MB</span>
+                <span>📥 Download Current Deck ({queue.length} Words)</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Fastest (~{Math.round(queue.length * 0.003 * 10) / 10} MB)</span>
               </button>
 
               <button 
                 className="btn-download-pack" 
-                onClick={() => handleStartDownloadAudio(data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel).slice(0, 100))}
+                onClick={() => handleStartDownloadAudio(data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel))}
                 disabled={isDownloadingAudio}
                 style={{ background: '#334155' }}
               >
-                <span>📥 Download {selectedLevel} Pack (100 Words)</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>~1.2 MB</span>
+                <span>📥 Download Level {selectedLevel} Pack ({data.allWords.filter(w => selectedLevel === 'ALL' ? true : w.level === selectedLevel).length} Words)</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Recommended for current level</span>
+              </button>
+
+              <button 
+                className="btn-download-pack" 
+                onClick={() => handleStartDownloadAudio(data.allWords)}
+                disabled={isDownloadingAudio}
+                style={{ background: 'var(--oxford-blue)' }}
+              >
+                <span>🚀 Download Complete Offline Sound Library ({data.allWords.length} Words)</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>100% Full Offline Studio Audio (~15 MB)</span>
               </button>
 
               <button 

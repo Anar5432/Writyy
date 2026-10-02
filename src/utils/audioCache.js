@@ -1,142 +1,80 @@
-// IndexedDB Audio Cache for Writyy
-// Stores studio dictionary MP3 audio files permanently on the user's phone
-// Enables 100% offline studio-quality pronunciation without robotic screenreaders.
+// Service Worker Cache API for Writyy Audio
+// Stores studio dictionary MP3 audio files permanently in Cache Storage
+// Enables 100% offline studio-quality pronunciation directly inside the phone.
 
-const DB_NAME = 'writyy_audio_db';
-const DB_VERSION = 1;
-const STORE_NAME = 'audio_cache';
+export const AUDIO_CACHE_NAME = 'writyy-audio-v1';
 
-let dbInstance = null;
-
-function openDB() {
-  if (dbInstance) return Promise.resolve(dbInstance);
-
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined' || !window.indexedDB) {
-      return reject(new Error('IndexedDB not supported'));
-    }
-
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-
-    request.onsuccess = (e) => {
-      dbInstance = e.target.result;
-      resolve(dbInstance);
-    };
-
-    request.onerror = (e) => {
-      reject(e.target.error);
-    };
-  });
-}
-
-// Retrieve cached audio Blob for a word
-export async function getCachedAudioBlob(word) {
-  if (!word) return null;
-  const key = word.trim().toLowerCase();
-
+// Open or get Cache Storage
+export async function getAudioCache() {
+  if (typeof window === 'undefined' || !window.caches) return null;
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.get(key);
-
-      req.onsuccess = () => {
-        if (req.result && req.result instanceof Blob) {
-          resolve(req.result);
-        } else {
-          resolve(null);
-        }
-      };
-
-      req.onerror = () => resolve(null);
-    });
-  } catch (err) {
+    return await window.caches.open(AUDIO_CACHE_NAME);
+  } catch (e) {
+    console.warn('[AudioCache] Failed to open Cache Storage:', e);
     return null;
-  }
-}
-
-// Save audio Blob to IndexedDB
-export async function saveAudioBlob(word, blob) {
-  if (!word || !blob) return false;
-  const key = word.trim().toLowerCase();
-
-  try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.put(blob, key);
-
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
-    });
-  } catch (err) {
-    return false;
   }
 }
 
 // Get count of cached words in offline storage
 export async function getCachedAudioCount() {
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.count();
-
-      req.onsuccess = () => resolve(req.result || 0);
-      req.onerror = () => resolve(0);
-    });
+    const cache = await getAudioCache();
+    if (!cache) return 0;
+    const keys = await cache.keys();
+    return keys.length;
   } catch (err) {
     return 0;
   }
 }
 
-// Fetch audio from standard studio dictionary sources and return a Blob
-export async function fetchWordAudioBlob(word) {
-  if (!word) return null;
+// Check if a word's audio is already in offline cache
+export async function isWordAudioCached(word) {
+  if (!word || typeof window === 'undefined' || !window.caches) return false;
   const cleanWord = word.trim().toLowerCase();
-
-  // Primary: Google TTS US (fastest global CDN, ~250ms response, clean standard neutral American)
-  const source1 = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
-  
-  // Secondary: Google Static Dictionary US sound
-  const source2 = `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${cleanWord}--_us_1.mp3`;
-
-  // Tertiary: Youdao dictionary
-  const source3 = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
-
-  const sources = [source1, source2, source3];
-
-  for (const url of sources) {
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors',
-        credentials: 'omit'
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        if (blob && blob.size > 1000) {
-          // Valid audio found! Save in offline DB
-          await saveAudioBlob(cleanWord, blob);
-          return blob;
-        }
-      }
-    } catch (e) {
-      // Try next source
-    }
+  const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+  try {
+    const cache = await getAudioCache();
+    if (!cache) return false;
+    const match = await cache.match(youdaoUrl);
+    return Boolean(match);
+  } catch (e) {
+    return false;
   }
+}
 
+// Pre-cache audio for a specific word into Cache Storage using no-cors fetch
+export async function fetchWordAudioBlob(word) {
+  if (!word || typeof window === 'undefined' || !window.caches) return false;
+  const cleanWord = word.trim().toLowerCase();
+  const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+
+  try {
+    const cache = await getAudioCache();
+    if (!cache) return false;
+
+    // Check if already in cache
+    const existing = await cache.match(youdaoUrl);
+    if (existing) return true;
+
+    // Fetch with no-cors mode so cross-origin CDN audio is accepted into Cache Storage
+    const response = await fetch(youdaoUrl, {
+      method: 'GET',
+      mode: 'no-cors',
+      credentials: 'omit'
+    });
+
+    if (response) {
+      await cache.put(youdaoUrl, response);
+      return true;
+    }
+  } catch (e) {
+    // Fail silently in background
+  }
+  return false;
+}
+
+// Backward compatibility stub (audio is now played directly via <audio> from Cache Storage)
+export async function getCachedAudioBlob(word) {
   return null;
 }
 
@@ -149,20 +87,33 @@ export async function downloadAudioPack(words, onProgress, abortSignal) {
   let completed = 0;
   let downloadedCount = 0;
 
-  // Process in small batches of 3 to avoid network throttling
-  const batchSize = 3;
+  const cache = await getAudioCache();
+  if (!cache) return { downloaded: 0, total: 0 };
+
+  // Fast concurrent batch downloading (batch of 5)
+  const batchSize = 5;
   for (let i = 0; i < uniqueWords.length; i += batchSize) {
     if (abortSignal && abortSignal.aborted) break;
 
     const batch = uniqueWords.slice(i, i + batchSize);
     await Promise.all(
       batch.map(async (word) => {
-        // Check if already in cache
-        const existing = await getCachedAudioBlob(word);
-        if (!existing) {
-          const blob = await fetchWordAudioBlob(word);
-          if (blob) downloadedCount++;
-        }
+        const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`;
+        try {
+          const existing = await cache.match(youdaoUrl);
+          if (!existing) {
+            const res = await fetch(youdaoUrl, {
+              method: 'GET',
+              mode: 'no-cors',
+              credentials: 'omit'
+            });
+            if (res) {
+              await cache.put(youdaoUrl, res);
+              downloadedCount++;
+            }
+          }
+        } catch (e) {}
+
         completed++;
         if (onProgress) {
           onProgress({
@@ -176,5 +127,6 @@ export async function downloadAudioPack(words, onProgress, abortSignal) {
     );
   }
 
-  return { downloaded: downloadedCount, total };
+  const finalCount = await getCachedAudioCount();
+  return { downloaded: downloadedCount, total, finalCount };
 }

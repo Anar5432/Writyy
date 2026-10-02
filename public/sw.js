@@ -1,5 +1,6 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v9-neon-db';
+const CACHE_NAME = 'writyy-v10-neon-offline';
+const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [
   '/',
@@ -53,13 +54,13 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Take control of all pages immediately and purge older caches
+// Take control of all pages immediately and purge older caches (preserves AUDIO_CACHE)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== AUDIO_CACHE) {
             console.log('[SW] Purging old cache version:', key);
             return caches.delete(key);
           }
@@ -75,7 +76,33 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // 1. App Navigation Requests (e.g. user opens the app or taps home screen icon)
+  // 1. Audio Requests (Youdao dictionary voice, Google TTS, gstatic)
+  // Cache-First strategy: Plays in 0ms offline directly from Cache Storage!
+  if (
+    url.hostname.includes('youdao.com') || 
+    url.hostname.includes('translate.google.com') || 
+    url.hostname.includes('gstatic.com')
+  ) {
+    event.respondWith(
+      caches.open(AUDIO_CACHE).then(async (audioCache) => {
+        const cached = await audioCache.match(event.request);
+        if (cached) return cached;
+
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+            audioCache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch (err) {
+          return cached;
+        }
+      })
+    );
+    return;
+  }
+
+  // 2. App Navigation Requests (e.g. user opens the app or taps home screen icon)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).then((networkResponse) => {
@@ -94,7 +121,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Static Assets (JS, CSS, Images, Icons, Fonts)
+  // 3. Static Assets (JS, CSS, Images, Icons, Fonts)
   // Cache-First with Network Revalidation (instant 0ms loading + background update)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
