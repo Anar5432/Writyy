@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   loginWithEmail, 
   signUpWithEmail, 
+  loginOrSignUpWithGoogle,
   logoutUser, 
   getNeonUrl, 
   saveNeonUrl, 
+  getGoogleClientId,
   isNeonConfigured 
 } from '../utils/neonDb';
 import { getStoredData } from '../utils/storage';
@@ -25,6 +27,68 @@ export default function AuthModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const googleBtnContainerRef = useRef(null);
+
+  // Initialize & Render Google Identity Services (GIS) Button
+  useEffect(() => {
+    if (!isOpen || currentUser || tab === 'config') return;
+
+    const clientId = getGoogleClientId();
+    if (!clientId) return;
+
+    let checkTimer = null;
+    let attempts = 0;
+
+    const renderGoogleBtn = () => {
+      attempts++;
+      if (window.google?.accounts?.id && googleBtnContainerRef.current) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response) => {
+              if (!response?.credential) return;
+              setIsLoading(true);
+              setErrorMsg('');
+              try {
+                const localData = getStoredData();
+                const res = await loginOrSignUpWithGoogle(response.credential, localData);
+                setSuccessMsg(`🎉 Welcome, ${res.user.displayName}! Synced with Neon.`);
+                if (onUserAuthChange) onUserAuthChange(res.user, res.data);
+                setTimeout(() => onClose(), 800);
+              } catch (err) {
+                console.error('[Google Auth Error]', err);
+                setErrorMsg(err.message || 'Google sign-in failed.');
+              } finally {
+                setIsLoading(false);
+              }
+            }
+          });
+
+          googleBtnContainerRef.current.innerHTML = '';
+          window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+            type: 'standard',
+            theme: 'outline',
+            size: 'large',
+            text: 'continue_with',
+            shape: 'pill',
+            width: 280,
+            logo_alignment: 'left'
+          });
+        } catch (e) {
+          console.warn('[Google GSI Error]', e);
+        }
+      } else if (attempts < 25) {
+        checkTimer = setTimeout(renderGoogleBtn, 150);
+      }
+    };
+
+    renderGoogleBtn();
+
+    return () => {
+      if (checkTimer) clearTimeout(checkTimer);
+    };
+  }, [isOpen, currentUser, tab]);
 
   // Neon DB Connection Form State
   const [neonUrlInput, setNeonUrlInput] = useState(() => getNeonUrl());
@@ -98,14 +162,18 @@ export default function AuthModal({
         {currentUser ? (
           <div className="auth-logged-in-box">
             <div className="user-profile-summary">
-              <div className="user-avatar-circle">
-                {currentUser.displayName ? currentUser.displayName[0].toUpperCase() : (currentUser.email ? currentUser.email[0].toUpperCase() : 'U')}
+              <div className="user-avatar-circle" style={{ overflow: 'hidden' }}>
+                {currentUser.photoUrl ? (
+                  <img src={currentUser.photoUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  currentUser.displayName ? currentUser.displayName[0].toUpperCase() : (currentUser.email ? currentUser.email[0].toUpperCase() : 'U')
+                )}
               </div>
               <div className="user-profile-meta">
                 <span className="user-name-title">{currentUser.displayName || 'Vocabulary Learner'}</span>
                 <span className="user-email-text">{currentUser.email}</span>
                 <span className="user-sync-badge">
-                  🟢 Connected to Neon Database
+                  {currentUser.provider === 'google' ? '🟢 Google Account & Neon Synced' : '🟢 Connected to Neon Database'}
                 </span>
               </div>
             </div>
@@ -195,7 +263,20 @@ export default function AuthModal({
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="auth-form">
+              <div>
+                <div className="google-auth-section" style={{ marginBottom: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div 
+                    ref={googleBtnContainerRef} 
+                    style={{ minHeight: '44px', display: 'flex', justifyContent: 'center', width: '100%' }}
+                  />
+                  <div className="auth-divider-line" style={{ display: 'flex', alignItems: 'center', width: '100%', margin: '14px 0 10px 0', color: '#94a3b8', fontSize: '0.78rem' }}>
+                    <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+                    <span style={{ padding: '0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or with email</span>
+                    <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="auth-form">
                 {tab === 'signup' && (
                   <div className="form-group-custom">
                     <label>Your Name (Optional)</label>
@@ -240,7 +321,8 @@ export default function AuthModal({
                   <span className="btn-arrow-circle">→</span>
                 </button>
               </form>
-            )}
+            </div>
+          )}
           </div>
         )}
       </div>

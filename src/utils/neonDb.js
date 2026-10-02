@@ -5,6 +5,11 @@ const STORAGE_URL_KEY = 'writyy_neon_url';
 const STORAGE_SESSION_KEY = 'writyy_neon_session';
 
 const DEFAULT_NEON_URL = 'postgresql://neondb_owner:npg_L9Gj3gmcASvO@ep-wispy-truth-b16e8gbw-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const DEFAULT_GOOGLE_CLIENT_ID = '158574308883-8f61eeshd0kccirl57hb4vqaq9a9epmf.apps.googleusercontent.com';
+
+export function getGoogleClientId() {
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+}
 
 // Retrieve active Neon connection string
 export function getNeonUrl() {
@@ -169,6 +174,102 @@ export async function loginWithEmail(email, password) {
   const userSession = {
     email: cleanEmail,
     displayName: userData.displayName || cleanEmail.split('@')[0]
+  };
+
+  localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+  return { user: userSession, data: userData };
+}
+
+// Decode Google JWT credential token
+export function decodeJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error('Failed to decode Google JWT token:', e);
+    return null;
+  }
+}
+
+// 1-Click Google Sign-In / Sign-Up with Neon Cloud Sync
+export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData = null) {
+  const profile = decodeJwt(jwtCredential);
+  if (!profile || !profile.email) {
+    throw new Error('Could not read user profile from Google credential.');
+  }
+
+  const sql = getSql();
+  if (!sql) {
+    throw new Error('Neon database is not configured.');
+  }
+
+  await initNeonTable();
+
+  const cleanEmail = profile.email.trim().toLowerCase();
+  const displayName = profile.name || cleanEmail.split('@')[0];
+  const photoUrl = profile.picture || '';
+
+  // Check if account already exists in Neon
+  const existing = await sql`
+    SELECT email, data FROM writyy_users WHERE LOWER(email) = ${cleanEmail} LIMIT 1
+  `;
+
+  let userData = {};
+  if (existing && existing.length > 0) {
+    // Existing user: retrieve data
+    userData = existing[0].data || {};
+    if (!userData.displayName || !userData.photoUrl) {
+      userData.displayName = userData.displayName || displayName;
+      userData.photoUrl = userData.photoUrl || photoUrl;
+      await sql`
+        UPDATE writyy_users 
+        SET data = ${JSON.stringify(userData)}::jsonb, updated_at = NOW() 
+        WHERE LOWER(email) = ${cleanEmail}
+      `;
+    }
+  } else {
+    // New user with Google: preserve any local progress from this device!
+    userData = existingLocalData ? {
+      displayName,
+      photoUrl,
+      stack1_mastered: existingLocalData.stack1_mastered || [],
+      stack2_spelling: existingLocalData.stack2_spelling || [],
+      stack3_meaning: existingLocalData.stack3_meaning || [],
+      customWords: (existingLocalData.allWords || []).filter(w => w.id && w.id.startsWith('custom_')),
+      stats: existingLocalData.stats || { totalTested: 0, correctSpelling: 0 },
+      history: (existingLocalData.history || []).slice(-100),
+      lastUpdated: new Date().toISOString()
+    } : {
+      displayName,
+      photoUrl,
+      stack1_mastered: [],
+      stack2_spelling: [],
+      stack3_meaning: [],
+      customWords: [],
+      stats: { totalTested: 0, correctSpelling: 0 },
+      history: [],
+      lastUpdated: new Date().toISOString()
+    };
+
+    const googleHash = 'google_oauth_' + (profile.sub || Math.random().toString(36));
+    await sql`
+      INSERT INTO writyy_users (email, password_hash, data) 
+      VALUES (${cleanEmail}, ${googleHash}, ${JSON.stringify(userData)}::jsonb)
+    `;
+  }
+
+  const userSession = {
+    email: cleanEmail,
+    displayName: userData.displayName || displayName,
+    photoUrl: userData.photoUrl || photoUrl,
+    provider: 'google'
   };
 
   localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
