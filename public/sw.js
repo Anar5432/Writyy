@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v7-mobile-audio-sync';
+const CACHE_NAME = 'writyy-v8-named-db';
 
 const CORE_ASSETS = [
   '/',

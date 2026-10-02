@@ -27,7 +27,8 @@ const DEFAULT_FIREBASE_CONFIG = {
   projectId: "impressive-acolyte-1lxdt",
   storageBucket: "impressive-acolyte-1lxdt.firebasestorage.app",
   messagingSenderId: "822358393666",
-  appId: "1:822358393666:web:eae8ccb24cfb9ce07d7edb"
+  appId: "1:822358393666:web:eae8ccb24cfb9ce07d7edb",
+  databaseId: "ai-studio-25eb01a1-4492-4b78-902d-3f7dd036ad82"
 };
 
 export function getFirebaseConfig() {
@@ -45,7 +46,8 @@ export function getFirebaseConfig() {
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_CONFIG.projectId,
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || DEFAULT_FIREBASE_CONFIG.storageBucket,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || DEFAULT_FIREBASE_CONFIG.appId
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || DEFAULT_FIREBASE_CONFIG.appId,
+    databaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || DEFAULT_FIREBASE_CONFIG.databaseId
   };
 }
 
@@ -73,7 +75,8 @@ try {
   if (config.apiKey && config.projectId) {
     app = getApps().length === 0 ? initializeApp(config) : getApp();
     auth = getAuth(app);
-    db = getFirestore(app);
+    const dbId = config.databaseId || 'ai-studio-25eb01a1-4492-4b78-902d-3f7dd036ad82';
+    db = getFirestore(app, dbId);
   }
 } catch (err) {
   console.warn('[Firebase] Initialization notice:', err);
