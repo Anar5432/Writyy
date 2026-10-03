@@ -4,7 +4,7 @@ import { AWL_SUBLISTS, AWL_SUBLIST_INFO, AWL_WORDS, AWL_WORDS_BY_SUBLIST, AWL_MA
 import { speechService } from './utils/audio';
 import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
-import { getStoredData, saveStoredData, resetAllProgress, ensureAwlEnriched, enrichWordWithAwl } from './utils/storage';
+import { getStoredData, saveStoredData, resetAllProgress, ensureAwlEnriched, enrichWordWithAwl, getTodayKey } from './utils/storage';
 import { getCurrentUser } from './utils/neonDb';
 import { 
   pushProgressToCloud, 
@@ -322,7 +322,7 @@ export default function App() {
     setTimeout(() => setToastMsg(''), 3000);
   };
 
-  // Initialize/filter Study Queue whenever selectedLevel, selectedAwlSublist, or data changes
+  // Initialize Study Queue whenever selectedLevel, selectedAwlSublist, or data.allWords.length changes
   useEffect(() => {
     let pool = [];
     if (selectedLevel === 'AWL') {
@@ -355,17 +355,12 @@ export default function App() {
       return true;
     });
 
-    const masteredWords = new Set(data.stack1_mastered.map(w => (w.word || '').toLowerCase()));
-    let unmastered = filtered.filter(w => !masteredWords.has((w.word || '').toLowerCase()));
-
-    // If all words are already mastered, DO NOT LOCK OUT! Provide continuous repetition practice
-    const wordsToPractice = (unmastered.length > 0 ? unmastered : filtered);
-    const shuffled = [...wordsToPractice].sort(() => Math.random() - 0.5);
-
-    setQueue(shuffled);
+    // The user wants ALL words of this sublist in the study queue so they can progress from 1 to N (e.g. 1 to 60)
+    // DO NOT filter out mastered words mid-session! The denominator MUST remain the total count of words in this sublist.
+    setQueue(filtered);
     setCurrentIndex(0);
     resetStudyInputs();
-  }, [selectedLevel, selectedAwlSublist, data.allWords.length, data.stack1_mastered.length]);
+  }, [selectedLevel, selectedAwlSublist, data.allWords.length]);
 
   // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, reviewTabMode, or stack data changes
   useEffect(() => {
@@ -625,6 +620,23 @@ export default function App() {
         }
       }
 
+      const todayKey = getTodayKey();
+      const currentDaily = prev.stats?.daily || {};
+      const currentToday = currentDaily[todayKey] || { tested: 0, correct: 0, wrong: 0, xp: 0 };
+
+      const updatedToday = {
+        tested: (currentToday.tested || 0) + 1,
+        correct: (currentToday.correct || 0) + (isCorrect ? 1 : 0),
+        wrong: (currentToday.wrong || 0) + (isCorrect ? 0 : 1),
+        xp: (currentToday.xp || 0) + (isCorrect ? 1 : -1)
+      };
+
+      const currentXp = typeof prev.stats?.xpBalance === 'number'
+        ? prev.stats.xpBalance
+        : ((prev.stats?.correctSpelling || 0) - ((prev.stats?.totalTested || 0) - (prev.stats?.correctSpelling || 0)));
+
+      const nextXpBalance = currentXp + (isCorrect ? 1 : -1);
+
       const nextData = {
         ...prev,
         stack1_mastered: updatedS1,
@@ -632,8 +644,13 @@ export default function App() {
         stack3_meaning: updatedS3,
         struggledHistory: updatedStruggled,
         stats: {
-          totalTested: prev.stats.totalTested + 1,
-          correctSpelling: prev.stats.correctSpelling + (isCorrect ? 1 : 0)
+          totalTested: (prev.stats?.totalTested || 0) + 1,
+          correctSpelling: (prev.stats?.correctSpelling || 0) + (isCorrect ? 1 : 0),
+          xpBalance: nextXpBalance,
+          daily: {
+            ...currentDaily,
+            [todayKey]: updatedToday
+          }
         }
       };
 
@@ -753,6 +770,23 @@ export default function App() {
         }
       }
 
+      const todayKey = getTodayKey();
+      const currentDaily = prev.stats?.daily || {};
+      const currentToday = currentDaily[todayKey] || { tested: 0, correct: 0, wrong: 0, xp: 0 };
+
+      const updatedToday = {
+        tested: (currentToday.tested || 0) + 1,
+        correct: (currentToday.correct || 0) + (isCorrect ? 1 : 0),
+        wrong: (currentToday.wrong || 0) + (isCorrect ? 0 : 1),
+        xp: (currentToday.xp || 0) + (isCorrect ? 1 : -1)
+      };
+
+      const currentXp = typeof prev.stats?.xpBalance === 'number'
+        ? prev.stats.xpBalance
+        : ((prev.stats?.correctSpelling || 0) - ((prev.stats?.totalTested || 0) - (prev.stats?.correctSpelling || 0)));
+
+      const nextXpBalance = currentXp + (isCorrect ? 1 : -1);
+
       const nextData = {
         ...prev,
         stack1_mastered: updatedS1,
@@ -760,8 +794,13 @@ export default function App() {
         stack3_meaning: updatedS3,
         struggledHistory: updatedStruggled,
         stats: {
-          totalTested: prev.stats.totalTested + 1,
-          correctSpelling: prev.stats.correctSpelling + (isCorrect ? 1 : 0)
+          totalTested: (prev.stats?.totalTested || 0) + 1,
+          correctSpelling: (prev.stats?.correctSpelling || 0) + (isCorrect ? 1 : 0),
+          xpBalance: nextXpBalance,
+          daily: {
+            ...currentDaily,
+            [todayKey]: updatedToday
+          }
         }
       };
 
@@ -915,10 +954,27 @@ export default function App() {
     }
   };
 
-  // Metrics
-  const total = data.stats.totalTested || 0;
-  const correct = data.stats.correctSpelling || 0;
+  // Metrics & Strict Daily XP
+  const todayKey = getTodayKey();
+  const todayStats = (data.stats && data.stats.daily && data.stats.daily[todayKey]) || {
+    tested: 0,
+    correct: 0,
+    wrong: 0,
+    xp: 0
+  };
+  const todayTested = todayStats.tested || 0;
+  const todayCorrect = todayStats.correct || 0;
+  const todayWrong = todayStats.wrong || 0;
+  const todayXp = typeof todayStats.xp === 'number' ? todayStats.xp : (todayCorrect - todayWrong);
+
+  const total = data.stats?.totalTested || 0;
+  const correct = data.stats?.correctSpelling || 0;
+  const wrong = Math.max(0, total - correct);
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  
+  const xpBalance = typeof data.stats?.xpBalance === 'number'
+    ? data.stats.xpBalance
+    : (correct - wrong);
   
   let estimatedBand = 'N/A';
   if (total >= 5) {
@@ -993,6 +1049,16 @@ export default function App() {
           </div>
 
           <div className="topbar-right">
+            {/* Account XP Balance Badge */}
+            <div 
+              className={`header-xp-badge ${xpBalance >= 0 ? 'xp-positive' : 'xp-negative'}`}
+              onClick={() => setActiveTab('stats')}
+              title={`Account XP Balance: ${xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`} (Click to view statistics)`}
+              style={{ cursor: 'pointer' }}
+            >
+              <span>{xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}</span>
+            </div>
+
             {/* Cloud Sync & Account Button */}
             <button 
               className="header-user-btn"
@@ -1181,13 +1247,26 @@ export default function App() {
                     <span className="card-red-pin"></span>
                     <span className="academic-tier-name">
                       {currentWord.awlSublist 
-                        ? `AWL Sublist ${currentWord.awlSublist} • Academic Vocabulary` 
-                        : `${currentWord.level} Academic Vocabulary`}
+                        ? `AWL Sublist ${currentWord.awlSublist} • ${queue.length} Words Total` 
+                        : `${currentWord.level} Academic Vocabulary • ${queue.length} Words Total`}
                     </span>
                   </div>
-                  <span className="batch-index">
-                    Words {currentIndex + 1}/{queue.length}
-                  </span>
+                  <div className="batch-index-box">
+                    <span className="batch-index">
+                      Words {currentIndex + 1}/{queue.length}
+                    </span>
+                    <span className="batch-fraction-pill">
+                      {Math.round(((currentIndex + 1) / queue.length) * 100)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Visual Sublist Progress Bar (Measures 1/10, 1/2, 2/3 progress) */}
+                <div className="sublist-progress-bar-track" title={`Word ${currentIndex + 1} of ${queue.length} (${Math.round(((currentIndex + 1) / queue.length) * 100)}% done)`}>
+                  <div 
+                    className="sublist-progress-bar-fill" 
+                    style={{ width: `${Math.max(2, Math.round(((currentIndex + 1) / queue.length) * 100))}%` }} 
+                  />
                 </div>
 
                 {/* Central Stage: Pronunciation or Waveform Player */}
@@ -1320,7 +1399,10 @@ export default function App() {
                         </span>
                         <div>
                           <h3 className="feedback-title">
-                            {lastResult.isCorrectSpelling ? 'Excellent! Spelled Correctly' : 'Spelling Correction Needed'}
+                            <span>{lastResult.isCorrectSpelling ? 'Excellent! Spelled Correctly' : 'Spelling Correction Needed'}</span>
+                            <span className={`feedback-xp-pill ${lastResult.isCorrectSpelling ? 'xp-pill-green' : 'xp-pill-red'}`}>
+                              {lastResult.isCorrectSpelling ? '+1 XP' : '-1 XP'}
+                            </span>
                           </h3>
                           <span className="routed-pill">
                             {lastResult.routedToStack}
@@ -1743,9 +1825,14 @@ export default function App() {
                           </span>
                           <div>
                             <h3 className="feedback-title">
-                              {reviewResult.isCorrectSpelling 
-                                ? 'Mastered! Saved to Long-Term Memory' 
-                                : 'Keep practicing'}
+                              <span>
+                                {reviewResult.isCorrectSpelling 
+                                  ? 'Mastered! Saved to Long-Term Memory' 
+                                  : 'Keep practicing'}
+                              </span>
+                              <span className={`feedback-xp-pill ${reviewResult.isCorrectSpelling ? 'xp-pill-green' : 'xp-pill-red'}`}>
+                                {reviewResult.isCorrectSpelling ? '+1 XP' : '-1 XP'}
+                              </span>
                             </h3>
                           </div>
                         </div>
@@ -1942,24 +2029,68 @@ export default function App() {
         {/* ============================================================ */}
         {activeTab === 'stats' && (
           <div className="view-content fade-in">
-            {/* 3-Metric Stats Banner (Image 2 style: Lessons 34 | Total Time 3060 | Cost $560) */}
+            {/* Top Metrics Banner */}
             <div className="stats-metric-card">
               <div className="metric-col">
                 <span className="metric-title">Accuracy</span>
                 <span className="metric-value blue-val">{accuracy}%</span>
-                <span className="metric-sub">{correct} correct</span>
+                <span className="metric-sub">{correct} correct &bull; {wrong} wrong</span>
               </div>
               <div className="metric-divider"></div>
               <div className="metric-col">
-                <span className="metric-title">Tested</span>
+                <span className="metric-title">Words Taken</span>
                 <span className="metric-value red-val">{total}</span>
-                <span className="metric-sub">Attempts</span>
+                <span className="metric-sub">Total Attempts</span>
               </div>
               <div className="metric-divider"></div>
               <div className="metric-col">
                 <span className="metric-title">IELTS Band</span>
                 <span className="metric-value dark-val">{estimatedBand}</span>
                 <span className="metric-sub">Estimated</span>
+              </div>
+            </div>
+
+            {/* Dedicated Strict Daily Performance & XP Section */}
+            <div className="stats-xp-program-section">
+              <div className="xp-program-header">
+                <div className="xp-program-title-wrap">
+                  <span className="xp-program-tag">Daily Program</span>
+                  <h3 className="xp-program-title">Daily Practice & XP Balance</h3>
+                </div>
+                <div className="xp-program-rule">
+                  Rule: <span className="green-rule-text">+1 XP</span> per correct &bull; <span className="red-rule-text">-1 XP</span> per mistake
+                </div>
+              </div>
+
+              {/* Strict Daily & XP Grid */}
+              <div className="xp-program-grid">
+                <div className="xp-program-card neutral-box">
+                  <span className="xp-box-label">Words Done Today</span>
+                  <span className="xp-box-val neutral-val">{todayTested}</span>
+                  <span className="xp-box-sub">Completed today</span>
+                </div>
+
+                <div className="xp-program-card green-box">
+                  <span className="xp-box-label">Correct Today</span>
+                  <span className="xp-box-val green-val">{todayCorrect}</span>
+                  <span className="xp-box-sub green-sub">+{todayCorrect} XP earned</span>
+                </div>
+
+                <div className="xp-program-card red-box">
+                  <span className="xp-box-label">Wrong Today</span>
+                  <span className="xp-box-val red-val">{todayWrong}</span>
+                  <span className="xp-box-sub red-sub">-{todayWrong} XP deducted</span>
+                </div>
+
+                <div className={`xp-program-card balance-box ${xpBalance >= 0 ? 'green-box' : 'red-box'}`}>
+                  <span className="xp-box-label">Account XP Balance</span>
+                  <span className={`xp-box-val ${xpBalance >= 0 ? 'green-val' : 'red-val'}`}>
+                    {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
+                  </span>
+                  <span className="xp-box-sub">
+                    Today: <strong className={todayXp >= 0 ? 'green-sub' : 'red-sub'}>{todayXp >= 0 ? `+${todayXp}` : todayXp} XP</strong>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2441,6 +2572,10 @@ export default function App() {
         onSyncNow={handleForceSyncWithCloud}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
+        xpBalance={xpBalance}
+        todayTested={todayTested}
+        todayCorrect={todayCorrect}
+        todayWrong={todayWrong}
         onUserAuthChange={(user, initialData) => {
           setCurrentUser(user);
           if (user && initialData) {

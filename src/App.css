@@ -569,10 +569,43 @@ html, body {
   text-transform: uppercase;
 }
 
+.batch-index-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .batch-index {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--oxford-blue);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.batch-fraction-pill {
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: rgba(16, 55, 120, 0.08);
+  color: var(--oxford-blue);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.sublist-progress-bar-track {
+  width: 100%;
+  height: 5px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: -8px;
+  margin-bottom: 2px;
+}
+
+.sublist-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #103778 100%);
+  border-radius: 3px;
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hero-instruction-title {
@@ -2964,5 +2997,262 @@ html, body {
   margin: 2px 0 0 0;
 }
 
+/* ============================================================ */
+/* STRICT DAILY PERFORMANCE & XP BALANCE PROGRAM                 */
+/* ============================================================ */
 
+/* Topbar XP Badge */
+.header-xp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+  user-select: none;
+}
 
+.header-xp-badge:hover {
+  opacity: 0.85;
+}
+
+.header-xp-badge.xp-positive {
+  background: #ecfdf5;
+  color: #15803d;
+  border: 1.5px solid #86efac;
+}
+
+.header-xp-badge.xp-negative {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1.5px solid #fca5a5;
+}
+
+/* Feedback Banner XP Tags */
+.feedback-xp-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.feedback-xp-pill.xp-pill-green {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.feedback-xp-pill.xp-pill-red {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+/* Dedicated Stats XP Section */
+.stats-xp-program-section {
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 20px 18px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 20px;
+}
+
+.xp-program-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.xp-program-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--royal-blue);
+  background: var(--sky-blue);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 4px;
+}
+
+.xp-program-title {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  color: var(--oxford-blue);
+  margin: 0;
+}
+
+.xp-program-rule {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  background: #f8fafc;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-light);
+}
+
+.green-rule-text {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.red-rule-text {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* 4-Column / Responsive 2x2 Grid */
+.xp-program-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .xp-program-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.xp-program-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 14px 10px;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+
+.xp-program-card.neutral-box {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+}
+
+.xp-program-card.green-box {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+}
+
+.xp-program-card.red-box {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+}
+
+.xp-box-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.xp-program-card.green-box .xp-box-label {
+  color: #166534;
+}
+
+.xp-program-card.red-box .xp-box-label {
+  color: #991b1b;
+}
+
+.xp-box-val {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.xp-box-val.neutral-val {
+  color: var(--oxford-blue);
+}
+
+.xp-box-val.green-val {
+  color: #15803d;
+}
+
+.xp-box-val.red-val {
+  color: #b91c1c;
+}
+
+.xp-box-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.green-sub {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.red-sub {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* User Account XP Box (AuthModal) */
+.user-xp-box {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.user-xp-box.is-green {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+}
+
+.user-xp-box.is-red {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+}
+
+.user-xp-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.user-xp-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.user-xp-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.user-xp-val.green-text {
+  color: #15803d;
+}
+
+.user-xp-val.red-text {
+  color: #b91c1c;
+}
+
+.user-xp-box-detail {
+  font-size: 0.75rem;
+  color: var(--text-body);
+}

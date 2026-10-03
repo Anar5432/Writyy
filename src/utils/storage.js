@@ -31,6 +31,14 @@ export const ensureAwlEnriched = (wordsList) => {
   return [...enriched, ...toAppend];
 };
 
+export const getTodayKey = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const getStoredData = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('writyy_app_data_v1');
@@ -71,6 +79,14 @@ export const getStoredData = () => {
       initialStruggled = [...fromS2, ...fromS3];
     }
 
+    const rawStats = parsed.stats || {};
+    const totalTested = Number(rawStats.totalTested) || 0;
+    const correctSpelling = Number(rawStats.correctSpelling) || 0;
+    const wrongSpelling = Math.max(0, totalTested - correctSpelling);
+    const xpBalance = typeof rawStats.xpBalance === 'number'
+      ? rawStats.xpBalance
+      : (correctSpelling - wrongSpelling);
+
     const merged = {
       allWords: words,
       stack1_mastered: (parsed.stack1_mastered || []).map(enrichWordWithAwl),
@@ -78,7 +94,12 @@ export const getStoredData = () => {
       stack3_meaning: (parsed.stack3_meaning || []).map(enrichWordWithAwl),
       struggledHistory: initialStruggled,
       history: parsed.history || [],
-      stats: parsed.stats || { totalTested: 0, correctSpelling: 0 }
+      stats: {
+        totalTested,
+        correctSpelling,
+        xpBalance,
+        daily: rawStats.daily || {}
+      }
     };
 
     saveStoredData(merged);
@@ -105,7 +126,12 @@ export const initializeDefaultData = () => {
     stack3_meaning: [],
     struggledHistory: [],
     history: [],
-    stats: { totalTested: 0, correctSpelling: 0 }
+    stats: { 
+      totalTested: 0, 
+      correctSpelling: 0,
+      xpBalance: 0,
+      daily: {}
+    }
   };
   saveStoredData(initial);
   return initial;
@@ -120,7 +146,12 @@ export const resetAllProgress = () => {
     stack3_meaning: [],
     struggledHistory: [],
     history: [],
-    stats: { totalTested: 0, correctSpelling: 0 }
+    stats: { 
+      totalTested: 0, 
+      correctSpelling: 0,
+      xpBalance: 0,
+      daily: {}
+    }
   };
   saveStoredData(resetData);
   return resetData;

@@ -16,7 +16,7 @@ export function extractSyncPayload(data) {
     struggledHistory: data.struggledHistory || [],
     customWords,
     history: (data.history || []).slice(-100),
-    stats: data.stats || { totalTested: 0, correctSpelling: 0 },
+    stats: data.stats || { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
     lastUpdated: new Date().toISOString()
   };
 
@@ -122,11 +122,34 @@ export function mergeCloudAndLocal(localData, cloudData) {
     }
   }
 
-  // Take the highest stats
+  // Take the highest stats and merge daily stats accurately
   const localTested = (localData.stats && localData.stats.totalTested) || 0;
   const cloudTested = (cloudData.stats && cloudData.stats.totalTested) || 0;
   const localCorrect = (localData.stats && localData.stats.correctSpelling) || 0;
   const cloudCorrect = (cloudData.stats && cloudData.stats.correctSpelling) || 0;
+
+  const mergedDaily = { ...(cloudData.stats?.daily || {}) };
+  for (const [dateKey, lDay] of Object.entries(localData.stats?.daily || {})) {
+    const cDay = mergedDaily[dateKey] || { tested: 0, correct: 0, wrong: 0, xp: 0 };
+    mergedDaily[dateKey] = {
+      tested: Math.max(lDay.tested || 0, cDay.tested || 0),
+      correct: Math.max(lDay.correct || 0, cDay.correct || 0),
+      wrong: Math.max(lDay.wrong || 0, cDay.wrong || 0),
+      xp: (lDay.tested || 0) >= (cDay.tested || 0)
+        ? (typeof lDay.xp === 'number' ? lDay.xp : ((lDay.correct || 0) - (lDay.wrong || 0)))
+        : (typeof cDay.xp === 'number' ? cDay.xp : ((cDay.correct || 0) - (cDay.wrong || 0)))
+    };
+  }
+
+  const finalTotalTested = Math.max(localTested, cloudTested);
+  const finalCorrect = Math.max(localCorrect, cloudCorrect);
+  const localXp = typeof localData.stats?.xpBalance === 'number'
+    ? localData.stats.xpBalance
+    : (localCorrect - (localTested - localCorrect));
+  const cloudXp = typeof cloudData.stats?.xpBalance === 'number'
+    ? cloudData.stats.xpBalance
+    : (cloudCorrect - (cloudTested - cloudCorrect));
+  const finalXp = finalTotalTested === localTested ? localXp : cloudXp;
 
   return {
     allWords: ensureAwlEnriched([...mergedCustom, ...INITIAL_WORDS]),
@@ -136,8 +159,10 @@ export function mergeCloudAndLocal(localData, cloudData) {
     struggledHistory: Array.from(struggledMap.values()),
     history: (cloudData.history && cloudData.history.length > 0) ? cloudData.history : (localData.history || []),
     stats: {
-      totalTested: Math.max(localTested, cloudTested),
-      correctSpelling: Math.max(localCorrect, cloudCorrect)
+      totalTested: finalTotalTested,
+      correctSpelling: finalCorrect,
+      xpBalance: finalXp,
+      daily: mergedDaily
     }
   };
 }

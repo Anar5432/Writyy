@@ -18,7 +18,11 @@ export default function AuthModal({
   onSyncNow, 
   isSyncing,
   lastSyncTime,
-  onUserAuthChange 
+  onUserAuthChange,
+  xpBalance = 0,
+  todayTested = 0,
+  todayCorrect = 0,
+  todayWrong = 0
 }) {
   const [tab, setTab] = useState('login'); // 'login' | 'signup' | 'config'
   const [email, setEmail] = useState('');
@@ -175,6 +179,19 @@ export default function AuthModal({
                 <span className="user-sync-badge">
                   {currentUser.provider === 'google' ? '🟢 Google Account & Neon Synced' : '🟢 Connected to Neon Database'}
                 </span>
+              </div>
+            </div>
+
+            {/* Strict XP & Today's Performance Card */}
+            <div className={`user-xp-box ${xpBalance >= 0 ? 'is-green' : 'is-red'}`}>
+              <div className="user-xp-box-header">
+                <span className="user-xp-title">Account XP Balance</span>
+                <span className={`user-xp-val ${xpBalance >= 0 ? 'green-text' : 'red-text'}`}>
+                  {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
+                </span>
+              </div>
+              <div className="user-xp-box-detail">
+                <span>Today: <strong>{todayTested}</strong> words ({todayCorrect} correct, {todayWrong} wrong)</span>
               </div>
             </div>
 
