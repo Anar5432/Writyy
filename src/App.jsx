@@ -674,6 +674,95 @@ export default function App() {
     setSubmitted(true);
   };
 
+  // Skip or Reveal Word in Study Mode when user does not know the word
+  const handleStudyDontKnow = () => {
+    if (!currentWord) return;
+    const correctWord = currentWord.word.toLowerCase();
+    const wordEntry = enrichWordWithAwl(currentWord);
+    let routedStack = '';
+
+    setData(prev => {
+      let updatedS1 = [...prev.stack1_mastered];
+      let updatedS2 = [...prev.stack2_spelling];
+      let updatedS3 = [...prev.stack3_meaning];
+      let updatedStruggled = [...(prev.struggledHistory || [])];
+
+      const struggledIdx = updatedStruggled.findIndex(
+        w => (w.word || '').toLowerCase() === correctWord
+      );
+
+      if (unknownMeaning) {
+        routedStack = 'Stack 3 (Meaning + Spelling)';
+        updatedS3 = upsertWordList(updatedS3, wordEntry);
+        updatedS2 = updatedS2.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+      } else {
+        routedStack = 'Stack 2 (Spelling)';
+        updatedS2 = upsertWordList(updatedS2, wordEntry);
+        updatedS3 = updatedS3.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+      }
+
+      const newStruggledItem = {
+        ...wordEntry,
+        mistakeCount: (struggledIdx >= 0 ? (updatedStruggled[struggledIdx].mistakeCount || 1) + 1 : 1),
+        status: 'in_review',
+        lastTestedAt: new Date().toISOString()
+      };
+      if (struggledIdx >= 0) {
+        updatedStruggled[struggledIdx] = newStruggledItem;
+      } else {
+        updatedStruggled.unshift(newStruggledItem);
+      }
+
+      const todayKey = getTodayKey();
+      const currentDaily = prev.stats?.daily || {};
+      const currentToday = currentDaily[todayKey] || { tested: 0, correct: 0, wrong: 0, xp: 0 };
+
+      const updatedToday = {
+        tested: (currentToday.tested || 0) + 1,
+        correct: (currentToday.correct || 0),
+        wrong: (currentToday.wrong || 0) + 1,
+        xp: (currentToday.xp || 0) - 1
+      };
+
+      const currentXp = typeof prev.stats?.xpBalance === 'number'
+        ? prev.stats.xpBalance
+        : ((prev.stats?.correctSpelling || 0) - ((prev.stats?.totalTested || 0) - (prev.stats?.correctSpelling || 0)));
+
+      const nextXpBalance = currentXp - 1;
+
+      const nextData = {
+        ...prev,
+        stack1_mastered: updatedS1,
+        stack2_spelling: updatedS2,
+        stack3_meaning: updatedS3,
+        struggledHistory: updatedStruggled,
+        stats: {
+          totalTested: (prev.stats?.totalTested || 0) + 1,
+          correctSpelling: (prev.stats?.correctSpelling || 0),
+          xpBalance: nextXpBalance,
+          daily: {
+            ...currentDaily,
+            [todayKey]: updatedToday
+          }
+        }
+      };
+
+      saveStoredData(nextData);
+      scheduleCloudSync(currentUser, nextData);
+      return nextData;
+    });
+
+    sfx.playIncorrect();
+
+    setLastResult({
+      isCorrectSpelling: false,
+      typed: '(Revealed)',
+      wordObj: currentWord,
+      routedToStack: routedStack
+    });
+    setSubmitted(true);
+  };
+
   const handleNextWord = () => {
     if (currentIndex + 1 < queue.length) {
       const nextIdx = currentIndex + 1;
@@ -815,6 +904,79 @@ export default function App() {
     setReviewResult({
       isCorrectSpelling: isCorrect,
       typed: trimmedInput,
+      wordObj: currentReviewWord
+    });
+    setReviewSubmitted(true);
+  };
+
+  // Skip or Reveal Word in Review Mode when user does not recognize or know the word
+  const handleReviewDontKnow = () => {
+    if (!currentReviewWord) return;
+    const correctWord = currentReviewWord.word.toLowerCase();
+
+    setData(prev => {
+      let updatedS1 = [...prev.stack1_mastered];
+      let updatedS2 = [...prev.stack2_spelling];
+      let updatedS3 = [...prev.stack3_meaning];
+      let updatedStruggled = [...(prev.struggledHistory || [])];
+
+      const struggledIdx = updatedStruggled.findIndex(
+        w => (w.word || '').toLowerCase() === correctWord
+      );
+
+      // Remains in review stack; increment mistake count
+      if (struggledIdx >= 0) {
+        updatedStruggled[struggledIdx] = {
+          ...updatedStruggled[struggledIdx],
+          mistakeCount: (updatedStruggled[struggledIdx].mistakeCount || 1) + 1,
+          status: 'in_review',
+          lastTestedAt: new Date().toISOString()
+        };
+      }
+
+      const todayKey = getTodayKey();
+      const currentDaily = prev.stats?.daily || {};
+      const currentToday = currentDaily[todayKey] || { tested: 0, correct: 0, wrong: 0, xp: 0 };
+
+      // In Review Mode: wrong/revealed answers do NOT deduct XP from balance (0 XP penalty)
+      const updatedToday = {
+        tested: (currentToday.tested || 0) + 1,
+        correct: (currentToday.correct || 0),
+        wrong: (currentToday.wrong || 0) + 1,
+        xp: (currentToday.xp || 0)
+      };
+
+      const currentXp = typeof prev.stats?.xpBalance === 'number'
+        ? prev.stats.xpBalance
+        : ((prev.stats?.correctSpelling || 0) - ((prev.stats?.totalTested || 0) - (prev.stats?.correctSpelling || 0)));
+
+      const nextData = {
+        ...prev,
+        stack1_mastered: updatedS1,
+        stack2_spelling: updatedS2,
+        stack3_meaning: updatedS3,
+        struggledHistory: updatedStruggled,
+        stats: {
+          totalTested: (prev.stats?.totalTested || 0) + 1,
+          correctSpelling: (prev.stats?.correctSpelling || 0),
+          xpBalance: currentXp,
+          daily: {
+            ...currentDaily,
+            [todayKey]: updatedToday
+          }
+        }
+      };
+
+      saveStoredData(nextData);
+      scheduleCloudSync(currentUser, nextData);
+      return nextData;
+    });
+
+    sfx.playIncorrect();
+
+    setReviewResult({
+      isCorrectSpelling: false,
+      typed: '(Revealed)',
       wordObj: currentReviewWord
     });
     setReviewSubmitted(true);
@@ -1371,6 +1533,14 @@ export default function App() {
                       <span className="btn-arrow-circle">→</span>
                     </button>
 
+                    <button 
+                      type="button" 
+                      className="btn-dont-know"
+                      onClick={handleStudyDontKnow}
+                    >
+                      <span>💡 Don't Know (Reveal Word)</span>
+                    </button>
+
                     {/* Pre-submit Previous/Skip Navigation Bar */}
                     <div className="pre-submit-nav-row">
                       <button 
@@ -1807,7 +1977,15 @@ export default function App() {
                         <span className="btn-arrow-circle">→</span>
                       </button>
 
-                      {/* Pre-submit Previous Navigation */}
+                      <button 
+                        type="button" 
+                        className="btn-dont-know"
+                        onClick={handleReviewDontKnow}
+                      >
+                        <span>💡 Don't Know (Reveal Word)</span>
+                      </button>
+
+                      {/* Pre-submit Previous and Skip Navigation */}
                       <div className="pre-submit-nav-row">
                         <button 
                           type="button" 
@@ -1816,6 +1994,14 @@ export default function App() {
                           disabled={reviewIndex === 0}
                         >
                           ‹ Previous Word ({reviewIndex > 0 ? reviewQueue[reviewIndex - 1].word : 'None'})
+                        </button>
+                        <button 
+                          type="button" 
+                          className="ghost-nav-pill"
+                          onClick={handleNextReviewWord}
+                          disabled={reviewIndex >= reviewQueue.length - 1}
+                        >
+                          Skip Word ›
                         </button>
                       </div>
                     </form>

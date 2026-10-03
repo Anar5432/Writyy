@@ -1128,6 +1128,35 @@ html, body {
   cursor: not-allowed;
 }
 
+.btn-dont-know {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  color: #475569;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 11px 18px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-dont-know:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: var(--oxford-blue);
+  transform: translateY(-1px);
+}
+
+.btn-dont-know:active {
+  transform: translateY(0);
+}
+
 /* Pagination Action Bar (Image 2 style: ← Prev 1/312 Next →) */
 .pagination-action-bar {
   display: flex;
@@ -2000,6 +2029,13 @@ html, body {
     padding: 13px 18px;
     width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .btn-dont-know {
+    font-size: 0.82rem;
+    padding: 10px 14px;
+    width: 100%;
     box-sizing: border-box;
   }
 
