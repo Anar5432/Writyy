@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v17-reveal-and-skip';
+const CACHE_NAME = 'writyy-v18-clean-dictation';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [
