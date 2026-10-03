@@ -362,49 +362,62 @@ export default function App() {
     resetStudyInputs();
   }, [selectedLevel, selectedAwlSublist, data.allWords.length]);
 
-  // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, reviewTabMode, or stack data changes
+  // Helper to compute filtered review queue from any state
+  const buildFilteredReviewQueue = (sourceData = data, stackType = reviewStackType, sublist = reviewSublist, tabMode = reviewTabMode) => {
+    let sourceList = [];
+    if (tabMode === 'active') {
+      sourceList = stackType === 'stack2' ? (sourceData.stack2_spelling || []) : (sourceData.stack3_meaning || []);
+    } else {
+      // Review History / Repetition Bank: all words ever struggled with
+      sourceList = sourceData.struggledHistory || [];
+      if (stackType === 'stack2') {
+        sourceList = sourceList.filter(w => w.struggleType === 'spelling' || w.struggleType === 'both');
+      } else if (stackType === 'stack3') {
+        sourceList = sourceList.filter(w => w.struggleType === 'meaning' || w.struggleType === 'both');
+      }
+    }
+
+    let filtered = sourceList.map(enrichWordWithAwl);
+    if (sublist === 'ALL') {
+      // keep all
+    } else if (sublist === 'OTHER') {
+      filtered = filtered.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+    } else {
+      const slNum = Number(sublist);
+      filtered = filtered.filter(w => {
+        const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+        return sub === slNum;
+      });
+    }
+    return filtered;
+  };
+
+  // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, or reviewTabMode changes
   useEffect(() => {
     if (activeTab === 'review') {
-      let sourceList = [];
-      if (reviewTabMode === 'active') {
-        sourceList = reviewStackType === 'stack2' ? data.stack2_spelling : data.stack3_meaning;
-      } else {
-        // Review History / Repetition Bank: all words ever struggled with
-        sourceList = data.struggledHistory || [];
-        if (reviewStackType === 'stack2') {
-          sourceList = sourceList.filter(w => w.struggleType === 'spelling' || w.struggleType === 'both');
-        } else if (reviewStackType === 'stack3') {
-          sourceList = sourceList.filter(w => w.struggleType === 'meaning' || w.struggleType === 'both');
-        }
-      }
-
-      // Filter by sublist
-      let filtered = sourceList.map(enrichWordWithAwl);
-      if (reviewSublist === 'ALL') {
-        // keep all
-      } else if (reviewSublist === 'OTHER') {
-        filtered = filtered.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
-      } else {
-        const slNum = Number(reviewSublist);
-        filtered = filtered.filter(w => {
-          const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-          return sub === slNum;
-        });
-      }
-
+      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist, reviewTabMode);
       setReviewQueue(filtered);
-      setReviewIndex(prev => (prev >= filtered.length ? 0 : prev));
+      setReviewIndex(0);
       resetReviewInputs();
     }
   }, [
     activeTab, 
     reviewStackType, 
     reviewSublist, 
-    reviewTabMode, 
-    data.stack2_spelling, 
-    data.stack3_meaning, 
-    data.struggledHistory
+    reviewTabMode
   ]);
+
+  // If cloud data finishes loading and reviewQueue was empty, populate it without disrupting active review
+  useEffect(() => {
+    if (activeTab === 'review' && reviewQueue.length === 0 && !reviewSubmitted) {
+      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist, reviewTabMode);
+      if (filtered.length > 0) {
+        setReviewQueue(filtered);
+        setReviewIndex(0);
+        resetReviewInputs();
+      }
+    }
+  }, [activeTab, (data.stack2_spelling || []).length, (data.stack3_meaning || []).length, (data.struggledHistory || []).length]);
 
   const currentWord = queue[currentIndex];
   const currentReviewWord = reviewQueue[reviewIndex];
@@ -821,7 +834,11 @@ export default function App() {
   };
 
   // Skip or Reveal Word in Review Mode when user does not recognize or know the word
-  const handleReviewDontKnow = () => {
+  const handleReviewDontKnow = (e) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
     if (!currentReviewWord) return;
     const correctWord = currentReviewWord.word.toLowerCase();
 
@@ -891,6 +908,9 @@ export default function App() {
       wordObj: currentReviewWord
     });
     setReviewSubmitted(true);
+    setTimeout(() => {
+      playCurrentAudio(currentReviewWord.word);
+    }, 200);
   };
 
   const handleNextReviewWord = () => {
@@ -900,6 +920,8 @@ export default function App() {
       resetReviewInputs();
     } else {
       showToast('🎉 Review batch completed! Resetting to start.');
+      const refreshed = buildFilteredReviewQueue(data, reviewStackType, reviewSublist, reviewTabMode);
+      setReviewQueue(refreshed);
       setReviewIndex(0);
       resetReviewInputs();
     }
@@ -1883,7 +1905,7 @@ export default function App() {
                       <button 
                         type="button" 
                         className="btn-dont-know"
-                        onClick={handleReviewDontKnow}
+                        onClick={(e) => handleReviewDontKnow(e)}
                       >
                         <span>💡 Don't Know (Reveal Word)</span>
                       </button>
