@@ -32,48 +32,72 @@ export async function isWordAudioCached(word) {
   if (!word || typeof window === 'undefined' || !window.caches) return false;
   const cleanWord = word.trim().toLowerCase();
   const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+  const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+
   try {
     const cache = await getAudioCache();
     if (!cache) return false;
-    const match = await cache.match(youdaoUrl);
+    const match = (await cache.match(youdaoUrl)) || (await cache.match(googleUrl));
     return Boolean(match);
   } catch (e) {
     return false;
   }
 }
 
-// Pre-cache audio for a specific word into Cache Storage using no-cors fetch
+// Pre-cache audio for a specific word into Cache Storage (Youdao + Google TTS fallback)
 export async function fetchWordAudioBlob(word) {
   if (!word || typeof window === 'undefined' || !window.caches) return false;
   const cleanWord = word.trim().toLowerCase();
   const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanWord)}&type=2`;
+  const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
 
   try {
     const cache = await getAudioCache();
     if (!cache) return false;
 
     // Check if already in cache
-    const existing = await cache.match(youdaoUrl);
+    const existing = (await cache.match(youdaoUrl)) || (await cache.match(googleUrl));
     if (existing) return true;
 
-    // Fetch with no-cors mode so cross-origin CDN audio is accepted into Cache Storage
-    const response = await fetch(youdaoUrl, {
-      method: 'GET',
-      mode: 'no-cors',
-      credentials: 'omit'
-    });
+    // 1. Try Youdao (with 3.5s timeout)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const response = await fetch(youdaoUrl, {
+        method: 'GET',
+        mode: 'no-cors',
+        credentials: 'omit',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (response && (response.status === 200 || response.type === 'opaque')) {
+        await cache.put(youdaoUrl, response.clone());
+        return true;
+      }
+    } catch (err) {}
 
-    if (response) {
-      await cache.put(youdaoUrl, response);
-      return true;
-    }
-  } catch (e) {
-    // Fail silently in background
-  }
+    // 2. Fallback to Google TTS (global CDN)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const gRes = await fetch(googleUrl, {
+        method: 'GET',
+        mode: 'no-cors',
+        credentials: 'omit',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (gRes && (gRes.status === 200 || gRes.type === 'opaque')) {
+        await cache.put(googleUrl, gRes.clone());
+        await cache.put(youdaoUrl, gRes);
+        return true;
+      }
+    } catch (gErr) {}
+  } catch (e) {}
   return false;
 }
 
-// Backward compatibility stub (audio is now played directly via <audio> from Cache Storage)
+// Backward compatibility stub (audio is played directly via <audio> from Cache Storage)
 export async function getCachedAudioBlob(word) {
   return null;
 }
@@ -90,8 +114,8 @@ export async function downloadAudioPack(words, onProgress, abortSignal) {
   const cache = await getAudioCache();
   if (!cache) return { downloaded: 0, total: 0 };
 
-  // Fast concurrent batch downloading (batch of 5)
-  const batchSize = 5;
+  // Fast concurrent batch downloading (batch of 4)
+  const batchSize = 4;
   for (let i = 0; i < uniqueWords.length; i += batchSize) {
     if (abortSignal && abortSignal.aborted) break;
 
@@ -99,18 +123,52 @@ export async function downloadAudioPack(words, onProgress, abortSignal) {
     await Promise.all(
       batch.map(async (word) => {
         const youdaoUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`;
+        const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q=${encodeURIComponent(word)}`;
+
         try {
-          const existing = await cache.match(youdaoUrl);
+          const existing = (await cache.match(youdaoUrl)) || (await cache.match(googleUrl));
           if (!existing) {
-            const res = await fetch(youdaoUrl, {
-              method: 'GET',
-              mode: 'no-cors',
-              credentials: 'omit'
-            });
-            if (res) {
-              await cache.put(youdaoUrl, res);
-              downloadedCount++;
+            let fetched = false;
+
+            // 1. Try Youdao
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 3500);
+              const res = await fetch(youdaoUrl, {
+                method: 'GET',
+                mode: 'no-cors',
+                credentials: 'omit',
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              if (res && (res.status === 200 || res.type === 'opaque')) {
+                await cache.put(youdaoUrl, res);
+                downloadedCount++;
+                fetched = true;
+              }
+            } catch (yErr) {}
+
+            // 2. Fallback to Google TTS if Youdao fails
+            if (!fetched) {
+              try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const gRes = await fetch(googleUrl, {
+                  method: 'GET',
+                  mode: 'no-cors',
+                  credentials: 'omit',
+                  signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (gRes && (gRes.status === 200 || gRes.type === 'opaque')) {
+                  await cache.put(googleUrl, gRes.clone());
+                  await cache.put(youdaoUrl, gRes);
+                  downloadedCount++;
+                }
+              } catch (gErr) {}
             }
+          } else {
+            downloadedCount++;
           }
         } catch (e) {}
 

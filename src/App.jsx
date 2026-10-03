@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CEFR_LEVELS } from './data/words';
-import { AWL_SUBLISTS, AWL_SUBLIST_INFO, AWL_WORDS } from './data/awlData';
+import { AWL_SUBLISTS, AWL_SUBLIST_INFO, AWL_WORDS, AWL_WORDS_BY_SUBLIST, AWL_MAP } from './data/awlData';
 import { speechService } from './utils/audio';
 import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
-import { getStoredData, saveStoredData, resetAllProgress } from './utils/storage';
+import { getStoredData, saveStoredData, resetAllProgress, ensureAwlEnriched, enrichWordWithAwl } from './utils/storage';
 import { getCurrentUser } from './utils/neonDb';
 import { 
   pushProgressToCloud, 
@@ -35,11 +35,16 @@ export default function App() {
 
   // Review Mode State
   const [reviewStackType, setReviewStackType] = useState('stack2'); // 'stack2' | 'stack3'
+  const [reviewSublist, setReviewSublist] = useState('ALL'); // 'ALL' | 1..10 | 'OTHER'
+  const [reviewTabMode, setReviewTabMode] = useState('active'); // 'active' | 'history'
   const [reviewQueue, setReviewQueue] = useState([]);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [reviewInput, setReviewInput] = useState('');
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewResult, setReviewResult] = useState(null);
+
+  // Stats Mode State
+  const [statsSublistFilter, setStatsSublistFilter] = useState('ALL'); // 'ALL' | 1..10 | 'OTHER'
 
   // Search Mode State
   const [searchQuery, setSearchQuery] = useState('');
@@ -319,46 +324,92 @@ export default function App() {
 
   // Initialize/filter Study Queue whenever selectedLevel, selectedAwlSublist, or data changes
   useEffect(() => {
-    let filtered = [...data.allWords];
+    let pool = [];
     if (selectedLevel === 'AWL') {
       if (selectedAwlSublist === 'ALL') {
-        filtered = filtered.filter(w => w.awlSublist != null);
+        pool = [...AWL_WORDS];
       } else {
-        filtered = filtered.filter(w => w.awlSublist === selectedAwlSublist);
+        const slNum = Number(selectedAwlSublist);
+        pool = [...(AWL_WORDS_BY_SUBLIST[slNum] || [])];
+        if (pool.length === 0) {
+          pool = AWL_WORDS.filter(w => w.awlSublist === slNum);
+        }
       }
-      // Deduplicate words in sublists by word text to ensure official headword count
-      const seen = new Set();
-      filtered = filtered.filter(w => {
-        const lower = (w.word || '').toLowerCase();
-        if (seen.has(lower)) return false;
-        seen.add(lower);
-        return true;
-      });
     } else if (selectedLevel === 'IELTS_FOCUS') {
-      filtered = filtered.filter(w => w.level === 'B2' || w.level === 'C1');
+      pool = data.allWords.filter(w => w.level === 'B2' || w.level === 'C1');
     } else if (selectedLevel !== 'ALL') {
-      filtered = filtered.filter(w => w.level === selectedLevel);
+      pool = data.allWords.filter(w => w.level === selectedLevel);
+    } else {
+      pool = [...data.allWords];
     }
-    const masteredIds = new Set(data.stack1_mastered.map(w => w.id));
-    let unmastered = filtered.filter(w => !masteredIds.has(w.id));
-    if (unmastered.length === 0) {
-      unmastered = filtered;
-    }
-    const shuffled = [...unmastered].sort(() => Math.random() - 0.5);
+
+    // Always enrich words with awlSublist tags
+    let filtered = pool.map(enrichWordWithAwl);
+
+    // Deduplicate words by word text
+    const seen = new Set();
+    filtered = filtered.filter(w => {
+      const lower = (w?.word || '').toLowerCase();
+      if (!lower || seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    });
+
+    const masteredWords = new Set(data.stack1_mastered.map(w => (w.word || '').toLowerCase()));
+    let unmastered = filtered.filter(w => !masteredWords.has((w.word || '').toLowerCase()));
+
+    // If all words are already mastered, DO NOT LOCK OUT! Provide continuous repetition practice
+    const wordsToPractice = (unmastered.length > 0 ? unmastered : filtered);
+    const shuffled = [...wordsToPractice].sort(() => Math.random() - 0.5);
+
     setQueue(shuffled);
     setCurrentIndex(0);
     resetStudyInputs();
-  }, [selectedLevel, selectedAwlSublist, data.allWords.length]);
+  }, [selectedLevel, selectedAwlSublist, data.allWords.length, data.stack1_mastered.length]);
 
-  // Review Queue snapshot - refreshed when reviewStackType changes OR when stack data changes
+  // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, reviewTabMode, or stack data changes
   useEffect(() => {
     if (activeTab === 'review') {
-      const list = reviewStackType === 'stack2' ? data.stack2_spelling : data.stack3_meaning;
-      setReviewQueue([...list]);
-      setReviewIndex(prev => (prev >= list.length ? 0 : prev));
+      let sourceList = [];
+      if (reviewTabMode === 'active') {
+        sourceList = reviewStackType === 'stack2' ? data.stack2_spelling : data.stack3_meaning;
+      } else {
+        // Review History / Repetition Bank: all words ever struggled with
+        sourceList = data.struggledHistory || [];
+        if (reviewStackType === 'stack2') {
+          sourceList = sourceList.filter(w => w.struggleType === 'spelling' || w.struggleType === 'both');
+        } else if (reviewStackType === 'stack3') {
+          sourceList = sourceList.filter(w => w.struggleType === 'meaning' || w.struggleType === 'both');
+        }
+      }
+
+      // Filter by sublist
+      let filtered = sourceList.map(enrichWordWithAwl);
+      if (reviewSublist === 'ALL') {
+        // keep all
+      } else if (reviewSublist === 'OTHER') {
+        filtered = filtered.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+      } else {
+        const slNum = Number(reviewSublist);
+        filtered = filtered.filter(w => {
+          const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+          return sub === slNum;
+        });
+      }
+
+      setReviewQueue(filtered);
+      setReviewIndex(prev => (prev >= filtered.length ? 0 : prev));
       resetReviewInputs();
     }
-  }, [reviewStackType, activeTab, data.stack2_spelling, data.stack3_meaning]);
+  }, [
+    activeTab, 
+    reviewStackType, 
+    reviewSublist, 
+    reviewTabMode, 
+    data.stack2_spelling, 
+    data.stack3_meaning, 
+    data.struggledHistory
+  ]);
 
   const currentWord = queue[currentIndex];
   const currentReviewWord = reviewQueue[reviewIndex];
@@ -491,6 +542,13 @@ export default function App() {
     }
   };
 
+  const upsertWordList = (list, word) => {
+    if (!word) return list || [];
+    const wordLower = (word.word || '').toLowerCase();
+    const filtered = (list || []).filter(w => w.id !== word.id && (w.word || '').toLowerCase() !== wordLower);
+    return [word, ...filtered];
+  };
+
   // Submit in Study Loop
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
@@ -501,45 +559,88 @@ export default function App() {
     const isCorrect = trimmedInput === correctWord;
 
     let routedStack = '';
-    const wordEntry = { ...currentWord, lastTested: new Date().toISOString() };
+    const wordEntry = { ...enrichWordWithAwl(currentWord), lastTested: new Date().toISOString() };
 
-    if (unknownMeaning) {
-      routedStack = 'Stack 3 (Unknown Meaning)';
-      setData(prev => ({
+    setData(prev => {
+      let updatedS1 = [...prev.stack1_mastered];
+      let updatedS2 = [...prev.stack2_spelling];
+      let updatedS3 = [...prev.stack3_meaning];
+      let updatedStruggled = [...(prev.struggledHistory || [])];
+
+      const struggledIdx = updatedStruggled.findIndex(
+        w => (w.word || '').toLowerCase() === correctWord
+      );
+
+      if (unknownMeaning) {
+        routedStack = 'Stack 3 (Unknown Meaning)';
+        updatedS3 = upsertWordList(updatedS3, wordEntry);
+        updatedS2 = updatedS2.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+        updatedS1 = updatedS1.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+
+        const newStruggledItem = {
+          ...wordEntry,
+          struggleType: (struggledIdx >= 0 && updatedStruggled[struggledIdx].struggleType === 'spelling') ? 'both' : 'meaning',
+          mistakeCount: (struggledIdx >= 0 ? (updatedStruggled[struggledIdx].mistakeCount || 1) : 0) + 1,
+          status: 'in_review',
+          addedAt: struggledIdx >= 0 ? updatedStruggled[struggledIdx].addedAt : new Date().toISOString(),
+          lastTestedAt: new Date().toISOString()
+        };
+        if (struggledIdx >= 0) {
+          updatedStruggled[struggledIdx] = newStruggledItem;
+        } else {
+          updatedStruggled.unshift(newStruggledItem);
+        }
+      } else if (!isCorrect) {
+        routedStack = 'Stack 2 (Spelling Error)';
+        updatedS2 = upsertWordList(updatedS2, wordEntry);
+        updatedS3 = updatedS3.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+        updatedS1 = updatedS1.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+
+        const newStruggledItem = {
+          ...wordEntry,
+          struggleType: (struggledIdx >= 0 && updatedStruggled[struggledIdx].struggleType === 'meaning') ? 'both' : 'spelling',
+          mistakeCount: (struggledIdx >= 0 ? (updatedStruggled[struggledIdx].mistakeCount || 1) : 0) + 1,
+          status: 'in_review',
+          addedAt: struggledIdx >= 0 ? updatedStruggled[struggledIdx].addedAt : new Date().toISOString(),
+          lastTestedAt: new Date().toISOString()
+        };
+        if (struggledIdx >= 0) {
+          updatedStruggled[struggledIdx] = newStruggledItem;
+        } else {
+          updatedStruggled.unshift(newStruggledItem);
+        }
+      } else {
+        routedStack = 'Stack 1 (Mastered)';
+        updatedS1 = upsertWordList(updatedS1, wordEntry);
+        updatedS2 = updatedS2.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+        updatedS3 = updatedS3.filter(w => w.id !== currentWord.id && (w.word || '').toLowerCase() !== correctWord);
+
+        // Retain in struggledHistory but mark as mastered (DO NOT DELETE!)
+        if (struggledIdx >= 0) {
+          updatedStruggled[struggledIdx] = {
+            ...updatedStruggled[struggledIdx],
+            status: 'mastered',
+            lastTestedAt: new Date().toISOString()
+          };
+        }
+      }
+
+      const nextData = {
         ...prev,
-        stack3_meaning: upsertWordList(prev.stack3_meaning, wordEntry),
-        stack2_spelling: prev.stack2_spelling.filter(w => w.id !== currentWord.id),
-        stack1_mastered: prev.stack1_mastered.filter(w => w.id !== currentWord.id),
+        stack1_mastered: updatedS1,
+        stack2_spelling: updatedS2,
+        stack3_meaning: updatedS3,
+        struggledHistory: updatedStruggled,
         stats: {
           totalTested: prev.stats.totalTested + 1,
           correctSpelling: prev.stats.correctSpelling + (isCorrect ? 1 : 0)
         }
-      }));
-    } else if (!isCorrect) {
-      routedStack = 'Stack 2 (Spelling Error)';
-      setData(prev => ({
-        ...prev,
-        stack2_spelling: upsertWordList(prev.stack2_spelling, wordEntry),
-        stack3_meaning: prev.stack3_meaning.filter(w => w.id !== currentWord.id),
-        stack1_mastered: prev.stack1_mastered.filter(w => w.id !== currentWord.id),
-        stats: {
-          totalTested: prev.stats.totalTested + 1,
-          correctSpelling: prev.stats.correctSpelling
-        }
-      }));
-    } else {
-      routedStack = 'Stack 1 (Mastered)';
-      setData(prev => ({
-        ...prev,
-        stack1_mastered: upsertWordList(prev.stack1_mastered, wordEntry),
-        stack2_spelling: prev.stack2_spelling.filter(w => w.id !== currentWord.id),
-        stack3_meaning: prev.stack3_meaning.filter(w => w.id !== currentWord.id),
-        stats: {
-          totalTested: prev.stats.totalTested + 1,
-          correctSpelling: prev.stats.correctSpelling + 1
-        }
-      }));
-    }
+      };
+
+      saveStoredData(nextData);
+      scheduleCloudSync(currentUser, nextData);
+      return nextData;
+    });
 
     if (isCorrect) {
       sfx.playCorrect();
@@ -561,9 +662,10 @@ export default function App() {
       const nextIdx = currentIndex + 1;
       setCurrentIndex(nextIdx);
       resetStudyInputs();
-      // Auto-play is handled with exact 350ms pause by the useEffect listener
     } else {
-      alert('🎉 Excellent! You have completed all words in this batch.');
+      showToast('🎉 Batch completed! Continuing continuous repetition practice.');
+      const reshuffled = [...queue].sort(() => Math.random() - 0.5);
+      setQueue(reshuffled);
       setCurrentIndex(0);
       resetStudyInputs();
     }
@@ -614,28 +716,59 @@ export default function App() {
     const correctWord = currentReviewWord.word.toLowerCase();
     const isCorrect = trimmedInput === correctWord;
 
-    if (isCorrect) {
-      sfx.playCorrect();
-      setData(prev => ({
+    setData(prev => {
+      let updatedS1 = [...prev.stack1_mastered];
+      let updatedS2 = [...prev.stack2_spelling];
+      let updatedS3 = [...prev.stack3_meaning];
+      let updatedStruggled = [...(prev.struggledHistory || [])];
+
+      const struggledIdx = updatedStruggled.findIndex(
+        w => (w.word || '').toLowerCase() === correctWord
+      );
+
+      if (isCorrect) {
+        sfx.playCorrect();
+        updatedS1 = upsertWordList(updatedS1, enrichWordWithAwl(currentReviewWord));
+        updatedS2 = updatedS2.filter(w => w.id !== currentReviewWord.id && (w.word || '').toLowerCase() !== correctWord);
+        updatedS3 = updatedS3.filter(w => w.id !== currentReviewWord.id && (w.word || '').toLowerCase() !== correctWord);
+
+        // Update status in struggled history to 'mastered' (DO NOT DELETE FROM ARCHIVE!)
+        if (struggledIdx >= 0) {
+          updatedStruggled[struggledIdx] = {
+            ...updatedStruggled[struggledIdx],
+            status: 'mastered',
+            lastTestedAt: new Date().toISOString()
+          };
+        }
+      } else {
+        sfx.playIncorrect();
+        // Increment mistake count in struggled history
+        if (struggledIdx >= 0) {
+          updatedStruggled[struggledIdx] = {
+            ...updatedStruggled[struggledIdx],
+            mistakeCount: (updatedStruggled[struggledIdx].mistakeCount || 1) + 1,
+            status: 'in_review',
+            lastTestedAt: new Date().toISOString()
+          };
+        }
+      }
+
+      const nextData = {
         ...prev,
-        stack1_mastered: upsertWordList(prev.stack1_mastered, currentReviewWord),
-        stack2_spelling: prev.stack2_spelling.filter(w => w.id !== currentReviewWord.id),
-        stack3_meaning: prev.stack3_meaning.filter(w => w.id !== currentReviewWord.id),
+        stack1_mastered: updatedS1,
+        stack2_spelling: updatedS2,
+        stack3_meaning: updatedS3,
+        struggledHistory: updatedStruggled,
         stats: {
           totalTested: prev.stats.totalTested + 1,
-          correctSpelling: prev.stats.correctSpelling + 1
+          correctSpelling: prev.stats.correctSpelling + (isCorrect ? 1 : 0)
         }
-      }));
-    } else {
-      sfx.playIncorrect();
-      setData(prev => ({
-        ...prev,
-        stats: {
-          totalTested: prev.stats.totalTested + 1,
-          correctSpelling: prev.stats.correctSpelling
-        }
-      }));
-    }
+      };
+
+      saveStoredData(nextData);
+      scheduleCloudSync(currentUser, nextData);
+      return nextData;
+    });
 
     setReviewResult({
       isCorrectSpelling: isCorrect,
@@ -650,17 +783,66 @@ export default function App() {
       const nextIdx = reviewIndex + 1;
       setReviewIndex(nextIdx);
       resetReviewInputs();
-      // Auto-play is handled with exact 350ms pause by the review useEffect listener
     } else {
-      alert('🎉 Stack review session completed!');
+      showToast('🎉 Review batch completed! Resetting to start.');
       setReviewIndex(0);
       resetReviewInputs();
     }
   };
 
-  const upsertWordList = (list, word) => {
-    const filtered = list.filter(w => w.id !== word.id);
-    return [word, ...filtered];
+  // Repeat all struggled words for a specific sublist directly in Study Dictation mode
+  const handleRepeatSublistStruggledInStudy = (sublistNum) => {
+    let targetWords = [];
+    const allStruggled = (data.struggledHistory || []).map(enrichWordWithAwl);
+
+    if (sublistNum === 'ALL') {
+      targetWords = allStruggled;
+    } else if (sublistNum === 'OTHER') {
+      targetWords = allStruggled.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+    } else {
+      const slNum = Number(sublistNum);
+      targetWords = allStruggled.filter(w => {
+        const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+        return sub === slNum;
+      });
+    }
+
+    if (targetWords.length === 0) {
+      showToast(`No review history recorded for Sublist ${sublistNum} yet.`);
+      return;
+    }
+
+    const shuffled = [...targetWords].sort(() => Math.random() - 0.5);
+    setQueue(shuffled);
+    setCurrentIndex(0);
+    resetStudyInputs();
+    setActiveTab('study');
+    showToast(`Loaded ${shuffled.length} words from Sublist ${sublistNum} review history into Dictation!`);
+    setTimeout(() => {
+      if (shuffled[0]) playCurrentAudio(shuffled[0].word);
+    }, 300);
+  };
+
+  // Practice a single struggled word directly in Study Dictation mode
+  const handlePracticeSingleWord = (wordObj) => {
+    if (!wordObj || !wordObj.word) return;
+    const enriched = enrichWordWithAwl(wordObj);
+    const remaining = queue.filter(w => (w.word || '').toLowerCase() !== (enriched.word || '').toLowerCase());
+    setQueue([enriched, ...remaining]);
+    setCurrentIndex(0);
+    resetStudyInputs();
+    setActiveTab('study');
+    showToast(`Loaded "${enriched.word}" into Active Dictation!`);
+    setTimeout(() => {
+      playCurrentAudio(enriched.word);
+    }, 300);
+  };
+
+  // Switch to an AWL Sublist directly
+  const handleSelectAwlSublist = (slNum) => {
+    setSelectedLevel('AWL');
+    setSelectedAwlSublist(slNum);
+    setActiveTab('study');
   };
 
   // Search feature actions: Add word to active practice queue
@@ -1212,14 +1394,40 @@ export default function App() {
               </div>
             ) : (
               <div className="empty-state-card">
-                <h3>👏 Batch Completed!</h3>
-                <p>You have tested all words in this difficulty tier.</p>
-                <button 
-                  className="cta-red-button"
-                  onClick={() => setSelectedLevel('ALL')}
-                >
-                  Explore All Words →
-                </button>
+                <span className="empty-icon">🏆</span>
+                <h3>{selectedLevel === 'AWL' ? `AWL Sublist ${selectedAwlSublist} Completed!` : 'Batch Completed!'}</h3>
+                <p>All words in this tier are completed. Continue practicing and repeating to build automatic fluency!</p>
+                <div className="empty-action-buttons">
+                  <button 
+                    className="cta-red-button"
+                    onClick={() => {
+                      let reloadPool = [];
+                      if (selectedLevel === 'AWL') {
+                        if (selectedAwlSublist === 'ALL') reloadPool = [...AWL_WORDS];
+                        else reloadPool = [...(AWL_WORDS_BY_SUBLIST[Number(selectedAwlSublist)] || AWL_WORDS)];
+                      } else {
+                        reloadPool = data.allWords.filter(w => selectedLevel === 'ALL' || w.level === selectedLevel);
+                      }
+                      const reshuffled = [...reloadPool].sort(() => Math.random() - 0.5);
+                      setQueue(reshuffled);
+                      setCurrentIndex(0);
+                      resetStudyInputs();
+                    }}
+                  >
+                    🔁 Practice & Repeat Words ({selectedLevel === 'AWL' ? (selectedAwlSublist === 10 ? 30 : 60) : 'All'}) →
+                  </button>
+                  {selectedLevel === 'AWL' && selectedAwlSublist !== 'ALL' && Number(selectedAwlSublist) < 10 && (
+                    <button 
+                      className="cta-navy-button"
+                      onClick={() => {
+                        const nextSl = Number(selectedAwlSublist) + 1;
+                        setSelectedAwlSublist(nextSl);
+                      }}
+                    >
+                      Next Sublist {Number(selectedAwlSublist) + 1} →
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1344,226 +1552,386 @@ export default function App() {
         {/* ============================================================ */}
         {activeTab === 'review' && (
           <div className="view-content fade-in">
+            {/* Top Review Mode Switcher: Active Due vs History Bank */}
+            <div className="review-main-mode-toggle">
+              <button 
+                className={`review-mode-pill ${reviewTabMode === 'active' ? 'active' : ''}`}
+                onClick={() => setReviewTabMode('active')}
+              >
+                🔥 Due for Review ({data.stack2_spelling.length + data.stack3_meaning.length})
+              </button>
+              <button 
+                className={`review-mode-pill ${reviewTabMode === 'history' ? 'active' : ''}`}
+                onClick={() => setReviewTabMode('history')}
+              >
+                📚 Review History Bank ({data.struggledHistory?.length || 0})
+              </button>
+            </div>
+
             {/* Stack Switcher Tabs */}
             <div className="review-toggle-bar">
               <button 
                 className={`review-stack-btn ${reviewStackType === 'stack2' ? 'active-s2' : ''}`}
                 onClick={() => setReviewStackType('stack2')}
               >
-                📝 Stack 2: Spelling ({data.stack2_spelling.length})
+                📝 Stack 2: Spelling ({reviewTabMode === 'active' ? data.stack2_spelling.length : (data.struggledHistory || []).filter(w => w.struggleType === 'spelling' || w.struggleType === 'both').length})
               </button>
               <button 
                 className={`review-stack-btn ${reviewStackType === 'stack3' ? 'active-s3' : ''}`}
                 onClick={() => setReviewStackType('stack3')}
               >
-                💡 Stack 3: Meaning ({data.stack3_meaning.length})
+                💡 Stack 3: Meaning ({reviewTabMode === 'active' ? data.stack3_meaning.length : (data.struggledHistory || []).filter(w => w.struggleType === 'meaning' || w.struggleType === 'both').length})
               </button>
             </div>
 
-            {reviewQueue.length > 0 && currentReviewWord ? (
-              <div className="editorial-card review-mode-card">
-                <div className="card-top-header">
-                  <div className="academic-badge-row">
-                    <span className="card-red-pin"></span>
-                    <span className="academic-tier-name">
-                      {reviewStackType === 'stack2' ? 'Spelling Fix (Known Meaning)' : 'Meaning Learning + Spelling Fix'}
-                    </span>
-                  </div>
-                  <span className="batch-index">
-                    Review {reviewIndex + 1}/{reviewQueue.length}
-                  </span>
-                </div>
+            {/* AWL Sublist Filter Pills for Review Mode */}
+            <div className="review-awl-pills-row">
+              <button
+                className={`review-sub-pill ${reviewSublist === 'ALL' ? 'active' : ''}`}
+                onClick={() => setReviewSublist('ALL')}
+              >
+                All
+              </button>
+              {AWL_SUBLISTS.map(sl => {
+                const sourceList = reviewTabMode === 'active'
+                  ? (reviewStackType === 'stack2' ? data.stack2_spelling : data.stack3_meaning)
+                  : (data.struggledHistory || []).filter(w => reviewStackType === 'stack2' ? (w.struggleType === 'spelling' || w.struggleType === 'both') : (w.struggleType === 'meaning' || w.struggleType === 'both'));
+                const count = sourceList.filter(w => {
+                  const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+                  return sub === sl;
+                }).length;
+                return (
+                  <button
+                    key={sl}
+                    className={`review-sub-pill ${reviewSublist === sl ? 'active' : ''}`}
+                    onClick={() => setReviewSublist(sl)}
+                  >
+                    Sub {sl}
+                    {count > 0 && <span className="review-count-badge">{count}</span>}
+                  </button>
+                );
+              })}
+              <button
+                className={`review-sub-pill ${reviewSublist === 'OTHER' ? 'active' : ''}`}
+                onClick={() => setReviewSublist('OTHER')}
+              >
+                Other
+              </button>
+            </div>
 
-                {/* STACK 3 ADAPTATION: Permanent Definition Display */}
-                {reviewStackType === 'stack3' && (
-                  <div className="permanent-study-box">
-                    <div className="box-heading">
-                      <span className="pin-symbol">📌</span>
-                      <span>Learn Meaning & Memorize Spelling</span>
+            {reviewTabMode === 'active' ? (
+              reviewQueue.length > 0 && currentReviewWord ? (
+                <div className="editorial-card review-mode-card">
+                  <div className="card-top-header">
+                    <div className="academic-badge-row">
+                      <span className="card-red-pin"></span>
+                      <span className="academic-tier-name">
+                        {reviewStackType === 'stack2' ? 'Spelling Fix (Known Meaning)' : 'Meaning Learning + Spelling Fix'}
+                      </span>
                     </div>
-                    <p className="permanent-def-text">
-                      <strong>Definition:</strong> {currentReviewWord.definition}
-                    </p>
-                    {currentReviewWord.example && (
-                      <p className="permanent-example-text">
-                        <strong>Context:</strong> <em>"{currentReviewWord.example}"</em>
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Auditory Player */}
-                <div className="dictation-hero-stage">
-                  <div className="waveform-player-container">
-                    <button 
-                      className={`mini-play-btn ${isPlayingAudio ? 'playing' : ''}`}
-                      onClick={() => playCurrentAudio(currentReviewWord.word)}
-                    >
-                      {isPlayingAudio ? '⏸' : '▶'}
-                    </button>
-                    <div className="waveform-bars-wrap">
-                      {waveHeights.map((h, i) => (
-                        <span 
-                          key={i} 
-                          className={`wave-bar ${isPlayingAudio ? 'active-pulse' : ''} ${i % 3 === 0 ? 'red-accent' : ''}`}
-                          style={{
-                            height: isPlayingAudio ? `${Math.max(12, (h * (0.6 + Math.random() * 0.7)))}%` : `${h * 0.45}%`,
-                            animationDelay: `${i * 0.05}s`
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <span className="waveform-time">
-                      {currentReviewWord.level}
+                    <span className="batch-index">
+                      Review {reviewIndex + 1}/{reviewQueue.length}
                     </span>
                   </div>
 
-                  <div className="floating-sound-trigger">
-                    <button 
-                      className={`floating-sound-btn ${isPlayingAudio ? 'pulsing-ring' : ''}`}
-                      onClick={() => playCurrentAudio(currentReviewWord.word)}
-                    >
-                      <span className="speaker-icon">🔊</span>
-                    </button>
-                    <span className="floating-sound-caption">Listen to dictation</span>
-                  </div>
-                </div>
-
-                {/* Input form */}
-                {!reviewSubmitted ? (
-                  <form onSubmit={handleReviewSubmit} className="study-form">
-                    <div className="input-group-styled" onClick={() => reviewInputRef.current?.focus()}>
-                      <input
-                        ref={reviewInputRef}
-                        type="text"
-                        inputMode="text"
-                        enterKeyHint="go"
-                        className="hero-spelling-input"
-                        placeholder="Type spelling to verify..."
-                        value={reviewInput}
-                        onChange={(e) => setReviewInput(e.target.value)}
-                        onClick={(e) => e.target.focus()}
-                        onTouchEnd={(e) => {
-                          e.target.focus();
-                        }}
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck="false"
-                      />
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      className="cta-red-button"
-                      disabled={!reviewInput.trim()}
-                    >
-                      <span>Check Spelling</span>
-                      <span className="btn-arrow-circle">→</span>
-                    </button>
-
-                    {/* Pre-submit Previous Navigation */}
-                    <div className="pre-submit-nav-row">
-                      <button 
-                        type="button" 
-                        className="ghost-nav-pill"
-                        onClick={handlePrevReviewWord}
-                        disabled={reviewIndex === 0}
-                      >
-                        ‹ Previous Word ({reviewIndex > 0 ? reviewQueue[reviewIndex - 1].word : 'None'})
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="reveal-section fade-in">
-                    <div className={`feedback-banner-card ${reviewResult.isCorrectSpelling ? 'success-card' : 'error-card'}`}>
-                      <div className="feedback-status-row">
-                        <span className="status-badge-icon">
-                          {reviewResult.isCorrectSpelling ? '🌟' : '❌'}
-                        </span>
-                        <div>
-                          <h3 className="feedback-title">
-                            {reviewResult.isCorrectSpelling 
-                              ? 'Mastered! Promoted to Stack 1' 
-                              : 'Keep practicing'}
-                          </h3>
-                        </div>
+                  {/* STACK 3 ADAPTATION: Permanent Definition Display */}
+                  {reviewStackType === 'stack3' && (
+                    <div className="permanent-study-box">
+                      <div className="box-heading">
+                        <span className="pin-symbol">📌</span>
+                        <span>Learn Meaning & Memorize Spelling</span>
                       </div>
-
-                      {!reviewResult.isCorrectSpelling && (
-                        <div className="comparison-box">
-                          <div className="typed-box">
-                            <span className="comp-label">Typed:</span>
-                            <span className="wrong-strike">{reviewResult.typed}</span>
-                          </div>
-                          <div className="correct-box">
-                            <span className="comp-label">Correct:</span>
-                            <span className="exact-correct">{reviewResult.wordObj.word}</span>
-                          </div>
-                        </div>
+                      <p className="permanent-def-text">
+                        <strong>Definition:</strong> {currentReviewWord.definition}
+                      </p>
+                      {currentReviewWord.example && (
+                        <p className="permanent-example-text">
+                          <strong>Context:</strong> <em>"{currentReviewWord.example}"</em>
+                        </p>
                       )}
                     </div>
+                  )}
 
-                    {/* Word Details Box in Review Mode */}
-                    <div className="editorial-definition-box">
-                      <div className="word-hero-line">
-                        <h2 className="editorial-word-name">{reviewResult.wordObj.word}</h2>
-                        <span className="phonetic-tag">{reviewResult.wordObj.phonetic || `/${reviewResult.wordObj.word}/`}</span>
-                        <span className="pos-pill">{reviewResult.wordObj.pos}</span>
-                        <button 
-                          className="replay-mini-pill" 
-                          onClick={() => playCurrentAudio(reviewResult.wordObj.word)}
-                        >
-                          🔊 Replay
-                        </button>
+                  {/* Auditory Player */}
+                  <div className="dictation-hero-stage">
+                    <div className="waveform-player-container">
+                      <button 
+                        className={`mini-play-btn ${isPlayingAudio ? 'playing' : ''}`}
+                        onClick={() => playCurrentAudio(currentReviewWord.word)}
+                      >
+                        {isPlayingAudio ? '⏸' : '▶'}
+                      </button>
+                      <div className="waveform-bars-wrap">
+                        {waveHeights.map((h, i) => (
+                          <span 
+                            key={i} 
+                            className={`wave-bar ${isPlayingAudio ? 'active-pulse' : ''} ${i % 3 === 0 ? 'red-accent' : ''}`}
+                            style={{
+                              height: isPlayingAudio ? `${Math.max(12, (h * (0.6 + Math.random() * 0.7)))}%` : `${h * 0.45}%`,
+                              animationDelay: `${i * 0.05}s`
+                            }}
+                          />
+                        ))}
                       </div>
-
-                      <div className="def-body">
-                        <p className="def-line">
-                          <strong>Definition:</strong> {reviewResult.wordObj.definition}
-                        </p>
-                        {reviewResult.wordObj.example && (
-                          <p className="example-line">
-                            <strong>Context:</strong> <em>"{reviewResult.wordObj.example}"</em>
-                          </p>
-                        )}
-                      </div>
+                      <span className="waveform-time">
+                        {currentReviewWord.level}
+                      </span>
                     </div>
 
-                    {/* Review Navigation Bar */}
-                    <div className="pagination-action-bar">
+                    <div className="floating-sound-trigger">
                       <button 
-                        className="arrow-nav-btn" 
-                        onClick={handlePrevReviewWord}
-                        disabled={reviewIndex === 0}
-                        title="View Previous Review Word Details"
+                        className={`floating-sound-btn ${isPlayingAudio ? 'pulsing-ring' : ''}`}
+                        onClick={() => playCurrentAudio(currentReviewWord.word)}
                       >
-                        ← Prev ({reviewIndex > 0 ? reviewQueue[reviewIndex - 1].word : 'Start'})
+                        <span className="speaker-icon">🔊</span>
                       </button>
-
-                      <button 
-                        className="cta-red-button next-action-btn"
-                        onClick={handleNextReviewWord}
-                        autoFocus
-                      >
-                        <span>Next Review Word (Enter ↵)</span>
-                        <span className="btn-arrow-circle">→</span>
-                      </button>
+                      <span className="floating-sound-caption">Listen to dictation</span>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Input form */}
+                  {!reviewSubmitted ? (
+                    <form onSubmit={handleReviewSubmit} className="study-form">
+                      <div className="input-group-styled" onClick={() => reviewInputRef.current?.focus()}>
+                        <input
+                          ref={reviewInputRef}
+                          type="text"
+                          inputMode="text"
+                          enterKeyHint="go"
+                          className="hero-spelling-input"
+                          placeholder="Type spelling to verify..."
+                          value={reviewInput}
+                          onChange={(e) => setReviewInput(e.target.value)}
+                          onClick={(e) => e.target.focus()}
+                          onTouchEnd={(e) => {
+                            e.target.focus();
+                          }}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck="false"
+                        />
+                      </div>
+
+                      <button 
+                        type="submit" 
+                        className="cta-red-button"
+                        disabled={!reviewInput.trim()}
+                      >
+                        <span>Check Spelling</span>
+                        <span className="btn-arrow-circle">→</span>
+                      </button>
+
+                      {/* Pre-submit Previous Navigation */}
+                      <div className="pre-submit-nav-row">
+                        <button 
+                          type="button" 
+                          className="ghost-nav-pill"
+                          onClick={handlePrevReviewWord}
+                          disabled={reviewIndex === 0}
+                        >
+                          ‹ Previous Word ({reviewIndex > 0 ? reviewQueue[reviewIndex - 1].word : 'None'})
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="reveal-section fade-in">
+                      <div className={`feedback-banner-card ${reviewResult.isCorrectSpelling ? 'success-card' : 'error-card'}`}>
+                        <div className="feedback-status-row">
+                          <span className="status-badge-icon">
+                            {reviewResult.isCorrectSpelling ? '🌟' : '❌'}
+                          </span>
+                          <div>
+                            <h3 className="feedback-title">
+                              {reviewResult.isCorrectSpelling 
+                                ? 'Mastered! Saved to Long-Term Memory' 
+                                : 'Keep practicing'}
+                            </h3>
+                          </div>
+                        </div>
+
+                        {!reviewResult.isCorrectSpelling && (
+                          <div className="comparison-box">
+                            <div className="typed-box">
+                              <span className="comp-label">Typed:</span>
+                              <span className="wrong-strike">{reviewResult.typed}</span>
+                            </div>
+                            <div className="correct-box">
+                              <span className="comp-label">Correct:</span>
+                              <span className="exact-correct">{reviewResult.wordObj.word}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Word Details Box in Review Mode */}
+                      <div className="editorial-definition-box">
+                        <div className="word-hero-line">
+                          <h2 className="editorial-word-name">{reviewResult.wordObj.word}</h2>
+                          <span className="phonetic-tag">{reviewResult.wordObj.phonetic || `/${reviewResult.wordObj.word}/`}</span>
+                          <span className="pos-pill">{reviewResult.wordObj.pos}</span>
+                          <button 
+                            className="replay-mini-pill" 
+                            onClick={() => playCurrentAudio(reviewResult.wordObj.word)}
+                          >
+                            🔊 Replay
+                          </button>
+                        </div>
+
+                        <div className="def-body">
+                          <p className="def-line">
+                            <strong>Definition:</strong> {reviewResult.wordObj.definition}
+                          </p>
+                          {reviewResult.wordObj.example && (
+                            <p className="example-line">
+                              <strong>Context:</strong> <em>"{reviewResult.wordObj.example}"</em>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Review Navigation Bar */}
+                      <div className="pagination-action-bar">
+                        <button 
+                          className="arrow-nav-btn" 
+                          onClick={handlePrevReviewWord}
+                          disabled={reviewIndex === 0}
+                          title="View Previous Review Word Details"
+                        >
+                          ← Prev ({reviewIndex > 0 ? reviewQueue[reviewIndex - 1].word : 'Start'})
+                        </button>
+
+                        <button 
+                          className="cta-red-button next-action-btn"
+                          onClick={handleNextReviewWord}
+                          autoFocus
+                        >
+                          <span>Next Review Word (Enter ↵)</span>
+                          <span className="btn-arrow-circle">→</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="empty-state-card">
+                  <span className="empty-icon">🎉</span>
+                  <h3>
+                    {reviewSublist === 'ALL' 
+                      ? (reviewStackType === 'stack2' ? 'Stack 2 is Clean!' : 'Stack 3 is Clean!')
+                      : `Sublist ${reviewSublist} Review Cleared!`}
+                  </h3>
+                  <p>
+                    {reviewSublist === 'ALL'
+                      ? `No words currently waiting in ${reviewStackType === 'stack2' ? 'Stack 2 (Spelling Errors)' : 'Stack 3 (Unknown Meaning)'}.`
+                      : `All review words in Sublist ${reviewSublist} have been resolved. They remain stored in your Review History Bank.`}
+                  </p>
+                  <div className="empty-action-buttons">
+                    {(() => {
+                      const historyWordsForSub = (data.struggledHistory || []).filter(w => {
+                        if (reviewSublist === 'ALL') return true;
+                        if (reviewSublist === 'OTHER') return !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase());
+                        const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+                        return sub === Number(reviewSublist);
+                      });
+                      return historyWordsForSub.length > 0 ? (
+                        <button
+                          className="cta-red-button"
+                          onClick={() => handleRepeatSublistStruggledInStudy(reviewSublist)}
+                        >
+                          ⚡ Repeat {reviewSublist === 'ALL' ? 'All' : `Sublist ${reviewSublist}`} Review Words ({historyWordsForSub.length})
+                        </button>
+                      ) : null;
+                    })()}
+                    <button
+                      className="ghost-pill-btn"
+                      onClick={() => setReviewTabMode('history')}
+                    >
+                      📖 View Review History Bank
+                    </button>
+                    <button 
+                      className="cta-navy-button"
+                      onClick={() => setActiveTab('study')}
+                    >
+                      Return to Dictation
+                    </button>
+                  </div>
+                </div>
+              )
             ) : (
-              <div className="empty-state-card">
-                <span className="empty-icon">🎉</span>
-                <h3>Stack is Empty!</h3>
-                <p>No words currently waiting in {reviewStackType === 'stack2' ? 'Stack 2 (Spelling Errors)' : 'Stack 3 (Unknown Meaning)'}.</p>
-                <button 
-                  className="cta-navy-button"
-                  onClick={() => setActiveTab('study')}
-                >
-                  Return to Dictation
-                </button>
+              /* Review History Bank View inside Review Tab */
+              <div className="review-history-container">
+                <div className="history-header-bar">
+                  <div>
+                    <h3 className="history-title">
+                      {reviewSublist === 'ALL' ? 'Complete Review History Bank' : `Sublist ${reviewSublist} History Bank`}
+                    </h3>
+                    <p className="history-subtitle">
+                      {reviewQueue.length} words saved. All words you have ever struggled with are preserved here for repetition.
+                    </p>
+                  </div>
+                  {reviewQueue.length > 0 && (
+                    <button
+                      className="cta-red-button btn-compact"
+                      onClick={() => handleRepeatSublistStruggledInStudy(reviewSublist)}
+                    >
+                      ⚡ Practice All in Dictation ({reviewQueue.length})
+                    </button>
+                  )}
+                </div>
+
+                {reviewQueue.length === 0 ? (
+                  <div className="empty-struggled-banner">
+                    <span>No words recorded in history for this filter yet.</span>
+                  </div>
+                ) : (
+                  <div className="struggled-words-grid">
+                    {reviewQueue.map((w, idx) => (
+                      <div key={w.id || idx} className="struggled-word-card">
+                        <div className="struggled-card-header">
+                          <div className="struggled-word-name-group">
+                            <h4 className="struggled-word-name">{w.word}</h4>
+                            <span className="struggled-phonetic">{w.phonetic || `/${w.word}/`}</span>
+                            <span className="struggled-pos">{w.pos}</span>
+                            <span className="struggled-level-tag">
+                              {w.awlSublist ? `AWL Sub ${w.awlSublist}` : w.level}
+                            </span>
+                          </div>
+                          <div className="struggled-badges-group">
+                            <span className={`struggled-status-badge ${w.status === 'mastered' ? 'mastered' : 'review'}`}>
+                              {w.status === 'mastered' ? '✅ Mastered' : '⚠️ In Review'}
+                            </span>
+                            <span className="struggled-count-tag">
+                              {w.mistakeCount ? `${w.mistakeCount}x` : '1x'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="struggled-def">{w.definition}</p>
+                        {w.example && (
+                          <p className="struggled-example"><em>"{w.example}"</em></p>
+                        )}
+
+                        <div className="struggled-card-footer">
+                          <button 
+                            className="struggled-audio-btn"
+                            onClick={() => playCurrentAudio(w.word)}
+                            title="Listen to pronunciation"
+                          >
+                            🔊 Listen
+                          </button>
+                          <button 
+                            className="struggled-practice-btn"
+                            onClick={() => handlePracticeSingleWord(w)}
+                            title="Practice this single word in Dictation"
+                          >
+                            ⚡ Practice
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1641,6 +2009,149 @@ export default function App() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* Dedicated Review Words History & Repetition Bank (Persistent Archive) */}
+            <div className="stats-struggled-section">
+              <div className="section-header-box">
+                <div className="section-title-wrap">
+                  <span className="section-pill-tag">Persistent History Archive</span>
+                  <h3 className="section-main-title">📚 Review Words & Repetition Bank</h3>
+                  <p className="section-desc">
+                    Words you struggled with (spelling or unknown meaning) are permanently preserved here by sublist. 
+                    Even after mastery, review and repeat any sublist's words anytime without having to practice the entire dictionary.
+                  </p>
+                </div>
+                
+                {/* Stats summary of struggled words */}
+                <div className="struggled-metrics-row">
+                  <div className="struggled-metric-chip">
+                    <span className="sm-label">Total History:</span>
+                    <span className="sm-val">{data.struggledHistory?.length || 0}</span>
+                  </div>
+                  <div className="struggled-metric-chip">
+                    <span className="sm-label">In Review:</span>
+                    <span className="sm-val warning">{(data.struggledHistory || []).filter(w => w.status === 'in_review').length}</span>
+                  </div>
+                  <div className="struggled-metric-chip">
+                    <span className="sm-label">Mastered:</span>
+                    <span className="sm-val success">{(data.struggledHistory || []).filter(w => w.status === 'mastered').length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sublist Filter Pills */}
+              <div className="stats-awl-pills-row">
+                <button
+                  className={`stats-sub-pill ${statsSublistFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setStatsSublistFilter('ALL')}
+                >
+                  All ({data.struggledHistory?.length || 0})
+                </button>
+                {AWL_SUBLISTS.map(sl => {
+                  const slWords = (data.struggledHistory || []).filter(w => {
+                    const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+                    return sub === sl;
+                  });
+                  return (
+                    <button
+                      key={sl}
+                      className={`stats-sub-pill ${statsSublistFilter === sl ? 'active' : ''}`}
+                      onClick={() => setStatsSublistFilter(sl)}
+                    >
+                      Sub {sl}
+                      {slWords.length > 0 && <span className="stats-sub-badge">{slWords.length}</span>}
+                    </button>
+                  );
+                })}
+                <button
+                  className={`stats-sub-pill ${statsSublistFilter === 'OTHER' ? 'active' : ''}`}
+                  onClick={() => setStatsSublistFilter('OTHER')}
+                >
+                  Other ({(data.struggledHistory || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase())).length})
+                </button>
+              </div>
+
+              {/* Action Banner to practice all struggled words for current sublist */}
+              {(() => {
+                const currentFiltered = (data.struggledHistory || []).filter(w => {
+                  if (statsSublistFilter === 'ALL') return true;
+                  if (statsSublistFilter === 'OTHER') return !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase());
+                  const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+                  return sub === Number(statsSublistFilter);
+                });
+
+                if (currentFiltered.length === 0) {
+                  return (
+                    <div className="empty-struggled-banner">
+                      <span>✓ No words sent to review for {statsSublistFilter === 'ALL' ? 'any category' : `Sublist ${statsSublistFilter}`} yet! Keep up the great work.</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <div className="struggled-batch-action-bar">
+                      <span className="batch-action-summary">
+                        Showing <strong>{currentFiltered.length} words</strong> in {statsSublistFilter === 'ALL' ? 'All Review History' : `Sublist ${statsSublistFilter} History`}
+                      </span>
+                      <button 
+                        className="cta-red-button btn-compact"
+                        onClick={() => handleRepeatSublistStruggledInStudy(statsSublistFilter)}
+                      >
+                        ⚡ Practice These Words in Dictation ({currentFiltered.length})
+                      </button>
+                    </div>
+
+                    <div className="struggled-words-grid">
+                      {currentFiltered.map((w, idx) => (
+                        <div key={w.id || idx} className="struggled-word-card">
+                          <div className="struggled-card-header">
+                            <div className="struggled-word-name-group">
+                              <h4 className="struggled-word-name">{w.word}</h4>
+                              <span className="struggled-phonetic">{w.phonetic || `/${w.word}/`}</span>
+                              <span className="struggled-pos">{w.pos}</span>
+                              <span className="struggled-level-tag">
+                                {w.awlSublist ? `AWL Sub ${w.awlSublist}` : w.level}
+                              </span>
+                            </div>
+                            <div className="struggled-badges-group">
+                              <span className={`struggled-status-badge ${w.status === 'mastered' ? 'mastered' : 'review'}`}>
+                                {w.status === 'mastered' ? '✅ Mastered' : '⚠️ In Review'}
+                              </span>
+                              <span className="struggled-count-tag">
+                                {w.mistakeCount ? `${w.mistakeCount}x` : '1x'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="struggled-def">{w.definition}</p>
+                          {w.example && (
+                            <p className="struggled-example"><em>"{w.example}"</em></p>
+                          )}
+
+                          <div className="struggled-card-footer">
+                            <button 
+                              className="struggled-audio-btn"
+                              onClick={() => playCurrentAudio(w.word)}
+                              title="Listen to pronunciation"
+                            >
+                              🔊 Listen
+                            </button>
+                            <button 
+                              className="struggled-practice-btn"
+                              onClick={() => handlePracticeSingleWord(w)}
+                              title="Practice this single word in Dictation"
+                            >
+                              ⚡ Practice
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="install-card-helper" onClick={handleInstallClick}>

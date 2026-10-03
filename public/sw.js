@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v11-awl-sublists';
+const CACHE_NAME = 'writyy-v13-awl-sublist-review-repetition';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [
@@ -15,6 +15,7 @@ const CORE_ASSETS = [
 
 // Pre-cache core assets and discover production bundled scripts/styles
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       // 1. Add core shell files
@@ -85,7 +86,9 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(
       caches.open(AUDIO_CACHE).then(async (audioCache) => {
-        const cached = await audioCache.match(event.request);
+        const cached = (await audioCache.match(event.request.url)) ||
+                       (await audioCache.match(event.request, { ignoreVary: true })) ||
+                       (await audioCache.match(event.request));
         if (cached) return cached;
 
         try {

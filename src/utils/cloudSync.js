@@ -1,6 +1,7 @@
 // Cloud Synchronization Service for Writyy (via Neon PostgreSQL)
-import { fetchUserData, pushUserData } from './neonDb';
-import { INITIAL_WORDS } from '../data/words';
+import { fetchUserData, pushUserData } from './neonDb.js';
+import { INITIAL_WORDS } from '../data/words.js';
+import { ensureAwlEnriched, enrichWordWithAwl } from './storage.js';
 
 let syncDebounceTimer = null;
 
@@ -12,6 +13,7 @@ export function extractSyncPayload(data) {
     stack1_mastered: data.stack1_mastered || [],
     stack2_spelling: data.stack2_spelling || [],
     stack3_meaning: data.stack3_meaning || [],
+    struggledHistory: data.struggledHistory || [],
     customWords,
     history: (data.history || []).slice(-100),
     stats: data.stats || { totalTested: 0, correctSpelling: 0 },
@@ -95,6 +97,31 @@ export function mergeCloudAndLocal(localData, cloudData) {
   const spellingIds = new Set(mergedSpelling.map(w => w.id || w.word));
   const mergedMeaning = rawMeaning.filter(w => !masteredIds.has(w.id || w.word) && !spellingIds.has(w.id || w.word));
 
+  // Merge struggled history preserving mistake counts and statuses
+  const struggledMap = new Map();
+  const allStruggled = [...(cloudData.struggledHistory || []), ...(localData.struggledHistory || [])];
+  for (const item of allStruggled) {
+    if (!item) continue;
+    const key = (item.word || item.id || '').toLowerCase();
+    if (!key) continue;
+    const enrichedItem = enrichWordWithAwl(item);
+    if (!struggledMap.has(key)) {
+      struggledMap.set(key, enrichedItem);
+    } else {
+      const existing = struggledMap.get(key);
+      struggledMap.set(key, {
+        ...existing,
+        ...enrichedItem,
+        mistakeCount: Math.max(existing.mistakeCount || 1, enrichedItem.mistakeCount || 1),
+        status: (existing.status === 'in_review' || enrichedItem.status === 'in_review') ? 'in_review' : 'mastered',
+        lastTestedAt: new Date(Math.max(
+          new Date(existing.lastTestedAt || 0).getTime(),
+          new Date(enrichedItem.lastTestedAt || 0).getTime()
+        )).toISOString()
+      });
+    }
+  }
+
   // Take the highest stats
   const localTested = (localData.stats && localData.stats.totalTested) || 0;
   const cloudTested = (cloudData.stats && cloudData.stats.totalTested) || 0;
@@ -102,10 +129,11 @@ export function mergeCloudAndLocal(localData, cloudData) {
   const cloudCorrect = (cloudData.stats && cloudData.stats.correctSpelling) || 0;
 
   return {
-    allWords: [...mergedCustom, ...INITIAL_WORDS],
-    stack1_mastered: mergedMastered,
-    stack2_spelling: mergedSpelling,
-    stack3_meaning: mergedMeaning,
+    allWords: ensureAwlEnriched([...mergedCustom, ...INITIAL_WORDS]),
+    stack1_mastered: mergedMastered.map(enrichWordWithAwl),
+    stack2_spelling: mergedSpelling.map(enrichWordWithAwl),
+    stack3_meaning: mergedMeaning.map(enrichWordWithAwl),
+    struggledHistory: Array.from(struggledMap.values()),
     history: (cloudData.history && cloudData.history.length > 0) ? cloudData.history : (localData.history || []),
     stats: {
       totalTested: Math.max(localTested, cloudTested),
