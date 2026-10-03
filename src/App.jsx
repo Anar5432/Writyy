@@ -2032,6 +2032,14 @@ export default function App() {
             {/* Top Metrics Banner */}
             <div className="stats-metric-card">
               <div className="metric-col">
+                <span className="metric-title">XP Balance</span>
+                <span className={`metric-value ${xpBalance >= 0 ? 'green-val' : 'red-val'}`}>
+                  {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
+                </span>
+                <span className="metric-sub">{xpBalance >= 0 ? 'Account Points' : 'Negative Points'}</span>
+              </div>
+              <div className="metric-divider"></div>
+              <div className="metric-col">
                 <span className="metric-title">Accuracy</span>
                 <span className="metric-value blue-val">{accuracy}%</span>
                 <span className="metric-sub">{correct} correct &bull; {wrong} wrong</span>
@@ -2039,13 +2047,13 @@ export default function App() {
               <div className="metric-divider"></div>
               <div className="metric-col">
                 <span className="metric-title">Words Taken</span>
-                <span className="metric-value red-val">{total}</span>
+                <span className="metric-value dark-val">{total}</span>
                 <span className="metric-sub">Total Attempts</span>
               </div>
               <div className="metric-divider"></div>
               <div className="metric-col">
                 <span className="metric-title">IELTS Band</span>
-                <span className="metric-value dark-val">{estimatedBand}</span>
+                <span className="metric-value red-val">{estimatedBand}</span>
                 <span className="metric-sub">Estimated</span>
               </div>
             </div>

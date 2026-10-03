@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v14-sublist-fixed-count-progress';
+const CACHE_NAME = 'writyy-v15-strict-xp-daily-program';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [

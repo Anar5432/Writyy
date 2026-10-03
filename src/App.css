@@ -1266,6 +1266,7 @@ html, body {
 .metric-value.blue-val { color: var(--royal-blue); }
 .metric-value.red-val { color: var(--crimson-red); }
 .metric-value.dark-val { color: var(--oxford-blue); }
+.metric-value.green-val { color: #15803d; }
 
 .metric-sub {
   font-size: 0.72rem;
@@ -2035,9 +2036,16 @@ html, body {
 
   /* Fluid stats display */
   .stats-metric-card {
-    padding: 12px 6px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 8px;
+    padding: 16px 10px;
     width: 100%;
     box-sizing: border-box;
+  }
+
+  .stats-metric-card .metric-divider {
+    display: none;
   }
 
   .metric-value {
