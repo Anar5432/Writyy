@@ -774,18 +774,21 @@ export default function App() {
       const currentDaily = prev.stats?.daily || {};
       const currentToday = currentDaily[todayKey] || { tested: 0, correct: 0, wrong: 0, xp: 0 };
 
+      // In Review Mode: wrong answers do NOT deduct XP from balance (0 XP penalty)
+      const reviewXpDelta = isCorrect ? 1 : 0;
+
       const updatedToday = {
         tested: (currentToday.tested || 0) + 1,
         correct: (currentToday.correct || 0) + (isCorrect ? 1 : 0),
         wrong: (currentToday.wrong || 0) + (isCorrect ? 0 : 1),
-        xp: (currentToday.xp || 0) + (isCorrect ? 1 : -1)
+        xp: (currentToday.xp || 0) + reviewXpDelta
       };
 
       const currentXp = typeof prev.stats?.xpBalance === 'number'
         ? prev.stats.xpBalance
         : ((prev.stats?.correctSpelling || 0) - ((prev.stats?.totalTested || 0) - (prev.stats?.correctSpelling || 0)));
 
-      const nextXpBalance = currentXp + (isCorrect ? 1 : -1);
+      const nextXpBalance = currentXp + reviewXpDelta;
 
       const nextData = {
         ...prev,
@@ -1830,8 +1833,8 @@ export default function App() {
                                   ? 'Mastered! Saved to Long-Term Memory' 
                                   : 'Keep practicing'}
                               </span>
-                              <span className={`feedback-xp-pill ${reviewResult.isCorrectSpelling ? 'xp-pill-green' : 'xp-pill-red'}`}>
-                                {reviewResult.isCorrectSpelling ? '+1 XP' : '-1 XP'}
+                              <span className={`feedback-xp-pill ${reviewResult.isCorrectSpelling ? 'xp-pill-green' : 'xp-pill-neutral'}`}>
+                                {reviewResult.isCorrectSpelling ? '+1 XP' : '0 XP (No penalty)'}
                               </span>
                             </h3>
                           </div>
@@ -2066,7 +2069,7 @@ export default function App() {
                   <h3 className="xp-program-title">Daily Practice & XP Balance</h3>
                 </div>
                 <div className="xp-program-rule">
-                  Rule: <span className="green-rule-text">+1 XP</span> per correct &bull; <span className="red-rule-text">-1 XP</span> per mistake
+                  Rule: <span className="green-rule-text">+1 XP</span> per correct &bull; <span className="red-rule-text">-1 XP</span> per dictation mistake &bull; <span className="neutral-rule-text">0 XP penalty in review</span>
                 </div>
               </div>
 

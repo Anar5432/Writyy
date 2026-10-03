@@ -3063,6 +3063,12 @@ html, body {
   border: 1px solid #fca5a5;
 }
 
+.feedback-xp-pill.xp-pill-neutral {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
 /* Dedicated Stats XP Section */
 .stats-xp-program-section {
   background: #ffffff;
@@ -3121,6 +3127,11 @@ html, body {
 
 .red-rule-text {
   color: #b91c1c;
+  font-weight: 700;
+}
+
+.neutral-rule-text {
+  color: #475569;
   font-weight: 700;
 }
 
