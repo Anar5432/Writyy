@@ -1219,13 +1219,13 @@ export default function App() {
 
         {/* Top App Header */}
         <header className="app-topbar">
-          <div className="brand-badge" onClick={() => setActiveTab('study')} style={{ cursor: 'pointer' }}>
-            <span className="brand-navy">lazy</span>
-            <span className="brand-red">writyy</span>
-            <span className="brand-dot"></span>
-          </div>
+          <div className="topbar-left">
+            <div className="brand-badge" onClick={() => setActiveTab('study')} style={{ cursor: 'pointer' }}>
+              <span className="brand-navy">lazy</span>
+              <span className="brand-red">writyy</span>
+              <span className="brand-dot"></span>
+            </div>
 
-          <div className="topbar-right">
             {/* Account XP Balance Badge */}
             <div 
               className={`header-xp-badge ${xpBalance >= 0 ? 'xp-positive' : 'xp-negative'}`}
@@ -1235,17 +1235,9 @@ export default function App() {
             >
               <span>{xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}</span>
             </div>
+          </div>
 
-            {/* Account & Statistics Button */}
-            <button 
-              className="header-user-btn"
-              onClick={() => setShowAuthModal(true)}
-              title={currentUser ? `Signed in as ${currentUser.displayName || currentUser.email}` : "Account & Statistics"}
-            >
-              <span className={`user-sync-dot ${isSyncing ? 'syncing' : ''}`}></span>
-              <span>{currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : '👤 Account'}</span>
-            </button>
-
+          <div className="topbar-right">
             {/* Dropdown Menu Button */}
             <div className="dropdown-menu-wrapper" ref={menuDropdownRef}>
               <button 
@@ -1277,27 +1269,13 @@ export default function App() {
                     className="dropdown-item"
                     onClick={() => {
                       setShowMenuDropdown(false);
-                      setShowAddWordModal(true);
-                    }}
-                  >
-                    <span className="dropdown-icon">➕</span>
-                    <div className="dropdown-item-text">
-                      <strong>Add Custom Vocabulary</strong>
-                      <span>Create custom IELTS words</span>
-                    </div>
-                  </button>
-
-                  <button 
-                    className="dropdown-item"
-                    onClick={() => {
-                      setShowMenuDropdown(false);
                       setShowAuthModal(true);
                     }}
                   >
-                    <span className="dropdown-icon">📊</span>
+                    <span className="dropdown-icon">👤</span>
                     <div className="dropdown-item-text">
-                      <strong>Account & Statistics</strong>
-                      <span>XP balance, accuracy & sync</span>
+                      <strong>{currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : 'Account & Statistics'}</strong>
+                      <span>{currentUser ? '🟢 Synced with cloud · View stats' : 'Profile, cloud sync & XP stats'}</span>
                     </div>
                   </button>
 

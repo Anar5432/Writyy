@@ -181,6 +181,12 @@ html, body {
   margin-top: 4px;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .topbar-right {
   display: flex;
   align-items: center;

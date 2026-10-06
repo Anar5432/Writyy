@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v24-clean-topbar-menu';
+const CACHE_NAME = 'writyy-v25-header-layout-update';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [
