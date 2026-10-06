@@ -1157,6 +1157,57 @@ html, body {
   transform: translateY(0);
 }
 
+/* Review Inline Retry / Error Banner */
+.review-inline-error-banner {
+  background: #fff1f2;
+  border: 1.5px solid #fecdd3;
+  color: #9f1239;
+  padding: 11px 15px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 0.88rem;
+  animation: inlineErrorShake 0.35s ease-in-out;
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.08);
+}
+
+.review-inline-error-banner .error-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.review-inline-error-banner .error-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+}
+
+.review-inline-error-banner .error-text-wrap strong {
+  font-weight: 800;
+  color: #9f1239;
+}
+
+.review-inline-error-banner .error-text-wrap span {
+  font-size: 0.82rem;
+  color: #be123c;
+  word-break: break-word;
+}
+
+.hero-spelling-input.input-has-error {
+  border-color: #f43f5e !important;
+  background: #fff8f8 !important;
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15) !important;
+}
+
+@keyframes inlineErrorShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
 /* Pagination Action Bar (Image 2 style: ← Prev 1/312 Next →) */
 .pagination-action-bar {
   display: flex;

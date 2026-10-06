@@ -42,6 +42,7 @@ export default function App() {
   const [reviewInput, setReviewInput] = useState('');
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewResult, setReviewResult] = useState(null);
+  const [reviewErrorFeedback, setReviewErrorFeedback] = useState(null);
 
   // Stats Mode State
   const [statsSublistFilter, setStatsSublistFilter] = useState('ALL'); // 'ALL' | 1..10 | 'OTHER'
@@ -541,6 +542,7 @@ export default function App() {
     setReviewInput('');
     setReviewSubmitted(false);
     setReviewResult(null);
+    setReviewErrorFeedback(null);
     // Only auto-focus on desktop with physical keyboard to avoid locking mobile virtual keyboard
     const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
     if (!isTouch) {
@@ -825,15 +827,27 @@ export default function App() {
       return nextData;
     });
 
-    setReviewResult({
-      isCorrectSpelling: isCorrect,
-      typed: trimmedInput,
-      wordObj: currentReviewWord
-    });
-    setReviewSubmitted(true);
+    if (isCorrect) {
+      setReviewErrorFeedback(null);
+      setReviewResult({
+        isCorrectSpelling: true,
+        typed: trimmedInput,
+        wordObj: currentReviewWord
+      });
+      setReviewSubmitted(true);
+    } else {
+      // Stay on current word! Do not cross to next word, do not reveal correct answer or description!
+      setReviewErrorFeedback(`"${reviewInput.trim()}" is incorrect. Try again!`);
+      setTimeout(() => {
+        if (reviewInputRef.current) {
+          reviewInputRef.current.focus();
+          reviewInputRef.current.select();
+        }
+      }, 50);
+    }
   };
 
-  // Skip or Reveal Word in Review Mode when user does not recognize or know the word
+  // Reveal Word in Review Mode when user clicks 'I Don't Know / Show Answer'
   const handleReviewDontKnow = (e) => {
     if (e) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
@@ -841,6 +855,9 @@ export default function App() {
     }
     if (!currentReviewWord) return;
     const correctWord = currentReviewWord.word.toLowerCase();
+    const lastAttempt = reviewInput.trim();
+
+    setReviewErrorFeedback(null);
 
     setData(prev => {
       let updatedS1 = [...prev.stack1_mastered];
@@ -904,7 +921,7 @@ export default function App() {
 
     setReviewResult({
       isCorrectSpelling: false,
-      typed: '(Revealed)',
+      typed: lastAttempt || '(Revealed)',
       wordObj: currentReviewWord
     });
     setReviewSubmitted(true);
@@ -1872,16 +1889,29 @@ export default function App() {
                   {/* Input form */}
                   {!reviewSubmitted ? (
                     <form onSubmit={handleReviewSubmit} className="study-form">
+                      {reviewErrorFeedback && (
+                        <div className="review-inline-error-banner">
+                          <span className="error-icon">❌</span>
+                          <div className="error-text-wrap">
+                            <strong>Incorrect spelling</strong>
+                            <span>{reviewErrorFeedback}</span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="input-group-styled" onClick={() => reviewInputRef.current?.focus()}>
                         <input
                           ref={reviewInputRef}
                           type="text"
                           inputMode="text"
                           enterKeyHint="go"
-                          className="hero-spelling-input"
+                          className={`hero-spelling-input ${reviewErrorFeedback ? 'input-has-error' : ''}`}
                           placeholder="Type spelling to verify..."
                           value={reviewInput}
-                          onChange={(e) => setReviewInput(e.target.value)}
+                          onChange={(e) => {
+                            setReviewInput(e.target.value);
+                            if (reviewErrorFeedback) setReviewErrorFeedback(null);
+                          }}
                           onClick={(e) => e.target.focus()}
                           onTouchEnd={(e) => {
                             e.target.focus();
@@ -1907,10 +1937,10 @@ export default function App() {
                         className="btn-dont-know"
                         onClick={(e) => handleReviewDontKnow(e)}
                       >
-                        <span>💡 Don't Know (Reveal Word)</span>
+                        <span>💡 I Don't Know (Show Answer)</span>
                       </button>
 
-                      {/* Pre-submit Previous and Skip Navigation */}
+                      {/* Pre-submit Previous Navigation */}
                       <div className="pre-submit-nav-row">
                         <button 
                           type="button" 
@@ -1919,14 +1949,6 @@ export default function App() {
                           disabled={reviewIndex === 0}
                         >
                           ‹ Previous Word ({reviewIndex > 0 ? reviewQueue[reviewIndex - 1].word : 'None'})
-                        </button>
-                        <button 
-                          type="button" 
-                          className="ghost-nav-pill"
-                          onClick={handleNextReviewWord}
-                          disabled={reviewIndex >= reviewQueue.length - 1}
-                        >
-                          Skip Word ›
                         </button>
                       </div>
                     </form>

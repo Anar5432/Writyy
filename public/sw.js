@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v19-review-reveal-fixed';
+const CACHE_NAME = 'writyy-v20-retry-until-correct';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [
