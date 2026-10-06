@@ -19,10 +19,18 @@ export default function AuthModal({
   isSyncing,
   lastSyncTime,
   onUserAuthChange,
+  data,
   xpBalance = 0,
   todayTested = 0,
   todayCorrect = 0,
-  todayWrong = 0
+  todayWrong = 0,
+  total = 0,
+  correct = 0,
+  wrong = 0,
+  accuracy = 0,
+  estimatedBand = 'N/A',
+  onResetProgress,
+  onOpenDownload
 }) {
   const [tab, setTab] = useState('login'); // 'login' | 'signup' | 'config'
   const [email, setEmail] = useState('');
@@ -146,16 +154,80 @@ export default function AuthModal({
     setSuccessMsg('✓ Neon connection saved! Reloading...');
   };
 
+  const renderStatsAndXp = () => (
+    <>
+      {/* Strict XP & Today's Performance Card */}
+      <div className={`user-xp-box ${xpBalance >= 0 ? 'is-green' : 'is-red'}`}>
+        <div className="user-xp-box-header">
+          <span className="user-xp-title">Account XP Balance</span>
+          <span className={`user-xp-val ${xpBalance >= 0 ? 'green-text' : 'red-text'}`}>
+            {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
+          </span>
+        </div>
+        <div className="user-xp-box-detail">
+          <span>Today: <strong>{todayTested}</strong> words ({todayCorrect} correct, {todayWrong} wrong)</span>
+        </div>
+      </div>
+
+      {/* Comprehensive Learning Statistics */}
+      <div className="modal-stats-section">
+        <div className="modal-stats-section-title">
+          <span>📊 Learning Performance</span>
+        </div>
+
+        <div className="modal-metric-triad">
+          <div className="m-metric-box">
+            <span className="m-metric-label">Accuracy</span>
+            <span className="m-metric-val blue-val">{accuracy}%</span>
+            <span className="m-metric-sub">{correct} correct · {wrong} wrong</span>
+          </div>
+          <div className="m-metric-box">
+            <span className="m-metric-label">Words Taken</span>
+            <span className="m-metric-val dark-val">{total}</span>
+            <span className="m-metric-sub">Total Attempts</span>
+          </div>
+          <div className="m-metric-box">
+            <span className="m-metric-label">IELTS Band</span>
+            <span className="m-metric-val red-val">{estimatedBand}</span>
+            <span className="m-metric-sub">Estimated</span>
+          </div>
+        </div>
+
+        {/* Stacks Breakdown */}
+        <div className="modal-stacks-row">
+          <div className="modal-stack-chip s1-chip">
+            <span className="m-stack-title">Stack 1 (Mastered)</span>
+            <span className="m-stack-count">{data?.stack1_mastered?.length || 0} words</span>
+          </div>
+          <div className="modal-stack-chip s2-chip">
+            <span className="m-stack-title">Stack 2 (Spelling)</span>
+            <span className="m-stack-count">{data?.stack2_spelling?.length || 0} words</span>
+          </div>
+          <div className="modal-stack-chip s3-chip">
+            <span className="m-stack-title">Stack 3 (Meaning)</span>
+            <span className="m-stack-count">{data?.stack3_meaning?.length || 0} words</span>
+          </div>
+        </div>
+
+        {data?.struggledHistory && data.struggledHistory.length > 0 && (
+          <div className="modal-history-note">
+            <span>📚 <strong>{data.struggledHistory.length} words</strong> preserved in your Review History Bank</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="install-guide-modal auth-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-top">
           <div className="auth-modal-header-brand">
-            <span className="auth-cloud-icon">🐘</span>
+            <span className="auth-cloud-icon">👤</span>
             <div>
-              <h3>Neon Cloud Sync</h3>
+              <h3>Account & Statistics</h3>
               <p className="modal-sub" style={{ margin: 0 }}>
-                Serverless PostgreSQL cross-device synchronization.
+                {currentUser ? `Connected as ${currentUser.displayName || currentUser.email}` : 'Profile, Cloud Sync & Learning Performance'}
               </p>
             </div>
           </div>
@@ -182,18 +254,8 @@ export default function AuthModal({
               </div>
             </div>
 
-            {/* Strict XP & Today's Performance Card */}
-            <div className={`user-xp-box ${xpBalance >= 0 ? 'is-green' : 'is-red'}`}>
-              <div className="user-xp-box-header">
-                <span className="user-xp-title">Account XP Balance</span>
-                <span className={`user-xp-val ${xpBalance >= 0 ? 'green-text' : 'red-text'}`}>
-                  {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
-                </span>
-              </div>
-              <div className="user-xp-box-detail">
-                <span>Today: <strong>{todayTested}</strong> words ({todayCorrect} correct, {todayWrong} wrong)</span>
-              </div>
-            </div>
+            {/* Strict XP & Comprehensive Learning Statistics */}
+            {renderStatsAndXp()}
 
             {lastSyncTime && (
               <div className="sync-time-row">
@@ -220,10 +282,33 @@ export default function AuthModal({
                 Sign Out
               </button>
             </div>
+
+            {onResetProgress && (
+              <div className="modal-reset-link-wrap">
+                <button className="reset-link-btn" onClick={onResetProgress}>
+                  🗑️ Reset All Progress Stacks
+                </button>
+              </div>
+            )}
           </div>
         ) : (
-          /* Sign In / Sign Up Forms */
+          /* Sign In / Sign Up Forms & Guest Performance */
           <div className="auth-form-wrapper">
+            {/* Strict XP & Comprehensive Learning Statistics */}
+            {renderStatsAndXp()}
+
+            {onResetProgress && (
+              <div className="modal-reset-link-wrap" style={{ marginBottom: '14px' }}>
+                <button className="reset-link-btn" onClick={onResetProgress}>
+                  🗑️ Reset All Progress Stacks
+                </button>
+              </div>
+            )}
+
+            <div className="modal-stats-section-title" style={{ marginTop: '8px', marginBottom: '8px' }}>
+              <span>☁️ Cloud Sync & Account Sign In</span>
+            </div>
+
             <div className="auth-tab-row">
               <button 
                 className={`auth-tab-btn ${tab === 'login' ? 'active' : ''}`}

@@ -2417,7 +2417,9 @@ html, body {
 }
 
 .auth-modal-card {
-  max-width: 440px;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
 }
 
 .auth-modal-header-brand {
@@ -3362,6 +3364,248 @@ html, body {
 .user-xp-box-detail {
   font-size: 0.75rem;
   color: var(--text-body);
+}
+
+/* ============================================================ */
+/* TOPBAR ACTION DROPDOWN MENU                                  */
+/* ============================================================ */
+.dropdown-menu-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.header-menu-btn {
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-pill);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  color: var(--oxford-blue);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.header-menu-btn:hover,
+.header-menu-btn.active {
+  background: #f8fafc;
+  border-color: var(--royal-blue);
+  color: var(--royal-blue);
+  transform: translateY(-1px);
+}
+
+.header-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 255px;
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 6px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.dropdown-item:hover {
+  background: #f1f5f9;
+}
+
+.dropdown-item:active {
+  background: #e2e8f0;
+}
+
+.dropdown-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.dropdown-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dropdown-item-text strong {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--oxford-blue);
+  line-height: 1.2;
+}
+
+.dropdown-item-text span {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 4px 6px;
+}
+
+/* ============================================================ */
+/* MODAL LEARNING STATS SECTION (IN AUTHMODAL)                  */
+/* ============================================================ */
+.modal-stats-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.modal-stats-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--oxford-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.modal-metric-triad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.m-metric-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 8px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.m-metric-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.m-metric-val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.m-metric-sub {
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.modal-stacks-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.modal-stack-chip {
+  padding: 8px 6px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-stack-chip.s1-chip {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.modal-stack-chip.s2-chip {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.modal-stack-chip.s3-chip {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+}
+
+.m-stack-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.m-stack-count {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.s1-chip .m-stack-count {
+  color: #15803d;
+}
+
+.s2-chip .m-stack-count {
+  color: #b91c1c;
+}
+
+.s3-chip .m-stack-count {
+  color: #7e22ce;
+}
+
+.modal-history-note {
+  font-size: 0.74rem;
+  color: #475569;
+  background: #ffffff;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed #cbd5e1;
+  text-align: center;
+  margin-top: 6px;
+}
+
+.modal-reset-link-wrap {
+  text-align: center;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
 }
 
 /* ==========================================================

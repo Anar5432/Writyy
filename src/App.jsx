@@ -46,8 +46,6 @@ export default function App() {
   const [reviewResult, setReviewResult] = useState(null);
   const [reviewErrorFeedback, setReviewErrorFeedback] = useState(null);
 
-  // Stats Mode State
-  const [statsSublistFilter, setStatsSublistFilter] = useState('ALL'); // 'ALL' | 1..10 | 'OTHER'
 
   // Search Mode State
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,9 +82,29 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
 
+  // Topbar Dropdown Menu & Custom Word Modal
+  const [showMenuDropdown, setShowMenuDropdown] = useState(false);
+  const [showAddWordModal, setShowAddWordModal] = useState(false);
+  const menuDropdownRef = useRef(null);
+
   const inputRef = useRef(null);
   const reviewInputRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Close dropdown menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuDropdownRef.current && !menuDropdownRef.current.contains(e.target)) {
+        setShowMenuDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Check if running as installed standalone app on phone & setup update listeners
   useEffect(() => {
@@ -1199,16 +1217,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Top App Header (Image 1 & 2 inspired) */}
+        {/* Top App Header */}
         <header className="app-topbar">
-          <button 
-            className="icon-round-btn" 
-            onClick={() => setActiveTab('study')}
-            title="Home / Back"
-          >
-            ‹
-          </button>
-
           <div className="brand-badge" onClick={() => setActiveTab('study')} style={{ cursor: 'pointer' }}>
             <span className="brand-navy">lazy</span>
             <span className="brand-red">writyy</span>
@@ -1219,38 +1229,101 @@ export default function App() {
             {/* Account XP Balance Badge */}
             <div 
               className={`header-xp-badge ${xpBalance >= 0 ? 'xp-positive' : 'xp-negative'}`}
-              onClick={() => setActiveTab('stats')}
-              title={`Account XP Balance: ${xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`} (Click to view statistics)`}
+              onClick={() => setShowAuthModal(true)}
+              title={`Account XP Balance: ${xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`} (Click to view Account & Statistics)`}
               style={{ cursor: 'pointer' }}
             >
               <span>{xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}</span>
             </div>
 
-            {/* Cloud Sync & Account Button */}
+            {/* Account & Statistics Button */}
             <button 
               className="header-user-btn"
               onClick={() => setShowAuthModal(true)}
-              title={currentUser ? `Signed in as ${currentUser.displayName || currentUser.email}` : "Cloud Sync / Sign In"}
+              title={currentUser ? `Signed in as ${currentUser.displayName || currentUser.email}` : "Account & Statistics"}
             >
               <span className={`user-sync-dot ${isSyncing ? 'syncing' : ''}`}></span>
-              <span>{currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : '☁️ Cloud'}</span>
+              <span>{currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : '👤 Account'}</span>
             </button>
 
-            <button 
-              className="header-audio-btn" 
-              onClick={() => setShowAudioModal(true)}
-              title="Studio Audio & Offline Voice Pack"
-            >
-              <span>🎧</span>
-              <span className="audio-cache-tag">
-                {offlineAudioCount > 0 ? `${offlineAudioCount}` : 'Voice'}
-              </span>
-            </button>
+            {/* Dropdown Menu Button */}
+            <div className="dropdown-menu-wrapper" ref={menuDropdownRef}>
+              <button 
+                className={`header-menu-btn ${showMenuDropdown ? 'active' : ''}`}
+                onClick={() => setShowMenuDropdown(prev => !prev)}
+                title="Menu & Features"
+                aria-label="Menu & Features"
+              >
+                <span>☰</span>
+              </button>
+
+              {showMenuDropdown && (
+                <div className="header-dropdown-menu fade-in">
+                  <button 
+                    className="dropdown-item"
+                    onClick={() => {
+                      setShowMenuDropdown(false);
+                      setShowAudioModal(true);
+                    }}
+                  >
+                    <span className="dropdown-icon">📥</span>
+                    <div className="dropdown-item-text">
+                      <strong>Download Voice Packs</strong>
+                      <span>{offlineAudioCount > 0 ? `${offlineAudioCount} cached sounds` : 'Offline studio pronunciation'}</span>
+                    </div>
+                  </button>
+
+                  <button 
+                    className="dropdown-item"
+                    onClick={() => {
+                      setShowMenuDropdown(false);
+                      setShowAddWordModal(true);
+                    }}
+                  >
+                    <span className="dropdown-icon">➕</span>
+                    <div className="dropdown-item-text">
+                      <strong>Add Custom Vocabulary</strong>
+                      <span>Create custom IELTS words</span>
+                    </div>
+                  </button>
+
+                  <button 
+                    className="dropdown-item"
+                    onClick={() => {
+                      setShowMenuDropdown(false);
+                      setShowAuthModal(true);
+                    }}
+                  >
+                    <span className="dropdown-icon">📊</span>
+                    <div className="dropdown-item-text">
+                      <strong>Account & Statistics</strong>
+                      <span>XP balance, accuracy & sync</span>
+                    </div>
+                  </button>
+
+                  <div className="dropdown-divider"></div>
+
+                  <button 
+                    className="dropdown-item"
+                    onClick={() => {
+                      setShowMenuDropdown(false);
+                      handleInstallClick();
+                    }}
+                  >
+                    <span className="dropdown-icon">📲</span>
+                    <div className="dropdown-item-text">
+                      <strong>Install App</strong>
+                      <span>Add Writyy to Home Screen</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
 
-        {/* Global Navigation Tabs */}
+        {/* Global Navigation Tabs (Core 3 Tabs) */}
         <nav className="pill-nav-bar">
           <button 
             className={`pill-nav-btn ${activeTab === 'study' ? 'active' : ''}`}
@@ -1274,18 +1347,6 @@ export default function App() {
             onClick={() => setActiveTab('search')}
           >
             🔍 Search
-          </button>
-          <button 
-            className={`pill-nav-btn ${activeTab === 'stats' ? 'active' : ''}`}
-            onClick={() => setActiveTab('stats')}
-          >
-            📊 Stats
-          </button>
-          <button 
-            className={`pill-nav-btn ${activeTab === 'add' ? 'active' : ''}`}
-            onClick={() => setActiveTab('add')}
-          >
-            ➕ Add
           </button>
         </nav>
 
@@ -1783,7 +1844,7 @@ export default function App() {
                       style={{ marginTop: '12px' }}
                       onClick={() => {
                         setNewWord(searchQuery);
-                        setActiveTab('add');
+                        setShowAddWordModal(true);
                       }}
                     >
                       <span>Create "{searchQuery}" as Custom Word</span>
@@ -2320,375 +2381,90 @@ export default function App() {
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* VIEW 4: STATS & IELTS SCORE (Image 2 Stats Banner Style) */}
-        {/* ============================================================ */}
-        {activeTab === 'stats' && (
-          <div className="view-content fade-in">
-            {/* Top Metrics Banner */}
-            <div className="stats-metric-card">
-              <div className="metric-col">
-                <span className="metric-title">XP Balance</span>
-                <span className={`metric-value ${xpBalance >= 0 ? 'green-val' : 'red-val'}`}>
-                  {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
-                </span>
-                <span className="metric-sub">{xpBalance >= 0 ? 'Account Points' : 'Negative Points'}</span>
-              </div>
-              <div className="metric-divider"></div>
-              <div className="metric-col">
-                <span className="metric-title">Accuracy</span>
-                <span className="metric-value blue-val">{accuracy}%</span>
-                <span className="metric-sub">{correct} correct &bull; {wrong} wrong</span>
-              </div>
-              <div className="metric-divider"></div>
-              <div className="metric-col">
-                <span className="metric-title">Words Taken</span>
-                <span className="metric-value dark-val">{total}</span>
-                <span className="metric-sub">Total Attempts</span>
-              </div>
-              <div className="metric-divider"></div>
-              <div className="metric-col">
-                <span className="metric-title">IELTS Band</span>
-                <span className="metric-value red-val">{estimatedBand}</span>
-                <span className="metric-sub">Estimated</span>
-              </div>
-            </div>
-
-            {/* Dedicated Strict Daily Performance & XP Section */}
-            <div className="stats-xp-program-section">
-              <div className="xp-program-header">
-                <div className="xp-program-title-wrap">
-                  <span className="xp-program-tag">Daily Program</span>
-                  <h3 className="xp-program-title">Daily Practice & XP Balance</h3>
-                </div>
-                <div className="xp-program-rule">
-                  Rule: <span className="green-rule-text">+1 XP</span> per correct &bull; <span className="red-rule-text">-1 XP</span> per dictation mistake &bull; <span className="neutral-rule-text">0 XP penalty in review</span>
-                </div>
-              </div>
-
-              {/* Strict Daily & XP Grid */}
-              <div className="xp-program-grid">
-                <div className="xp-program-card neutral-box">
-                  <span className="xp-box-label">Words Done Today</span>
-                  <span className="xp-box-val neutral-val">{todayTested}</span>
-                  <span className="xp-box-sub">Completed today</span>
-                </div>
-
-                <div className="xp-program-card green-box">
-                  <span className="xp-box-label">Correct Today</span>
-                  <span className="xp-box-val green-val">{todayCorrect}</span>
-                  <span className="xp-box-sub green-sub">+{todayCorrect} XP earned</span>
-                </div>
-
-                <div className="xp-program-card red-box">
-                  <span className="xp-box-label">Wrong Today</span>
-                  <span className="xp-box-val red-val">{todayWrong}</span>
-                  <span className="xp-box-sub red-sub">-{todayWrong} XP deducted</span>
-                </div>
-
-                <div className={`xp-program-card balance-box ${xpBalance >= 0 ? 'green-box' : 'red-box'}`}>
-                  <span className="xp-box-label">Account XP Balance</span>
-                  <span className={`xp-box-val ${xpBalance >= 0 ? 'green-val' : 'red-val'}`}>
-                    {xpBalance >= 0 ? `+${xpBalance} XP` : `${xpBalance} XP`}
-                  </span>
-                  <span className="xp-box-sub">
-                    Today: <strong className={todayXp >= 0 ? 'green-sub' : 'red-sub'}>{todayXp >= 0 ? `+${todayXp}` : todayXp} XP</strong>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Stacks Breakdown Grid */}
-            <div className="stacks-summary-group">
-              <div className="stack-status-card s1-card">
-                <div className="status-top">
-                  <div className="status-badge s1-badge">Stack 1</div>
-                  <span className="status-count">{data.stack1_mastered.length} words</span>
-                </div>
-                <h4>Mastered Vocabulary</h4>
-                <p>Spelled correctly with known meaning. Pushed to long-term memory.</p>
-                <div className="chips-list">
-                  {data.stack1_mastered.slice(0, 10).map(w => (
-                    <span key={w.id} className="chip-pill s1-pill">{w.word}</span>
-                  ))}
-                  {data.stack1_mastered.length > 10 && (
-                    <span className="chip-more">+{data.stack1_mastered.length - 10} more</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="stack-status-card s2-card">
-                <div className="status-top">
-                  <div className="status-badge s2-badge">Stack 2</div>
-                  <span className="status-count">{data.stack2_spelling.length} words</span>
-                </div>
-                <h4>Spelling Errors</h4>
-                <p>You know what the word means, but made a spelling typo. Review spelling.</p>
-                <div className="chips-list">
-                  {data.stack2_spelling.slice(0, 10).map(w => (
-                    <span key={w.id} className="chip-pill s2-pill">{w.word}</span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="stack-status-card s3-card">
-                <div className="status-top">
-                  <div className="status-badge s3-badge">Stack 3</div>
-                  <span className="status-count">{data.stack3_meaning.length} words</span>
-                </div>
-                <h4>Meaning Unknown</h4>
-                <p>Flagged for comprehension. Screen will display definitions during review.</p>
-                <div className="chips-list">
-                  {data.stack3_meaning.slice(0, 10).map(w => (
-                    <span key={w.id} className="chip-pill s3-pill">{w.word}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Dedicated Review Words History & Repetition Bank (Persistent Archive) */}
-            <div className="stats-struggled-section">
-              <div className="section-header-box">
-                <div className="section-title-wrap">
-                  <span className="section-pill-tag">Persistent History Archive</span>
-                  <h3 className="section-main-title">📚 Review Words & Repetition Bank</h3>
-                  <p className="section-desc">
-                    Words you struggled with (spelling or unknown meaning) are permanently preserved here by sublist. 
-                    Even after mastery, review and repeat any sublist's words anytime without having to practice the entire dictionary.
-                  </p>
-                </div>
-                
-                {/* Stats summary of struggled words */}
-                <div className="struggled-metrics-row">
-                  <div className="struggled-metric-chip">
-                    <span className="sm-label">Total History:</span>
-                    <span className="sm-val">{data.struggledHistory?.length || 0}</span>
-                  </div>
-                  <div className="struggled-metric-chip">
-                    <span className="sm-label">In Review:</span>
-                    <span className="sm-val warning">{(data.struggledHistory || []).filter(w => w.status === 'in_review').length}</span>
-                  </div>
-                  <div className="struggled-metric-chip">
-                    <span className="sm-label">Mastered:</span>
-                    <span className="sm-val success">{(data.struggledHistory || []).filter(w => w.status === 'mastered').length}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sublist Filter Pills */}
-              <div className="stats-awl-pills-row">
-                <button
-                  className={`stats-sub-pill ${statsSublistFilter === 'ALL' ? 'active' : ''}`}
-                  onClick={() => setStatsSublistFilter('ALL')}
-                >
-                  All ({data.struggledHistory?.length || 0})
-                </button>
-                {AWL_SUBLISTS.map(sl => {
-                  const slWords = (data.struggledHistory || []).filter(w => {
-                    const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-                    return sub === sl;
-                  });
-                  return (
-                    <button
-                      key={sl}
-                      className={`stats-sub-pill ${statsSublistFilter === sl ? 'active' : ''}`}
-                      onClick={() => setStatsSublistFilter(sl)}
-                    >
-                      Sub {sl}
-                      {slWords.length > 0 && <span className="stats-sub-badge">{slWords.length}</span>}
-                    </button>
-                  );
-                })}
-                <button
-                  className={`stats-sub-pill ${statsSublistFilter === 'OTHER' ? 'active' : ''}`}
-                  onClick={() => setStatsSublistFilter('OTHER')}
-                >
-                  Other ({(data.struggledHistory || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase())).length})
-                </button>
-              </div>
-
-              {/* Action Banner to practice all struggled words for current sublist */}
-              {(() => {
-                const currentFiltered = (data.struggledHistory || []).filter(w => {
-                  if (statsSublistFilter === 'ALL') return true;
-                  if (statsSublistFilter === 'OTHER') return !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase());
-                  const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-                  return sub === Number(statsSublistFilter);
-                });
-
-                if (currentFiltered.length === 0) {
-                  return (
-                    <div className="empty-struggled-banner">
-                      <span>✓ No words sent to review for {statsSublistFilter === 'ALL' ? 'any category' : `Sublist ${statsSublistFilter}`} yet! Keep up the great work.</span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div>
-                    <div className="struggled-batch-action-bar">
-                      <span className="batch-action-summary">
-                        Showing <strong>{currentFiltered.length} words</strong> in {statsSublistFilter === 'ALL' ? 'All Review History' : `Sublist ${statsSublistFilter} History`}
-                      </span>
-                      <button 
-                        className="cta-red-button btn-compact"
-                        onClick={() => handleRepeatSublistStruggledInStudy(statsSublistFilter)}
-                      >
-                        ⚡ Practice These Words in Dictation ({currentFiltered.length})
-                      </button>
-                    </div>
-
-                    <div className="struggled-words-grid">
-                      {currentFiltered.map((w, idx) => (
-                        <div key={w.id || idx} className="struggled-word-card">
-                          <div className="struggled-card-header">
-                            <div className="struggled-word-name-group">
-                              <h4 className="struggled-word-name">{w.word}</h4>
-                              <span className="struggled-phonetic">{w.phonetic || `/${w.word}/`}</span>
-                              <span className="struggled-pos">{w.pos}</span>
-                              <span className="struggled-level-tag">
-                                {w.awlSublist ? `AWL Sub ${w.awlSublist}` : w.level}
-                              </span>
-                            </div>
-                            <div className="struggled-badges-group">
-                              <span className={`struggled-status-badge ${w.status === 'mastered' ? 'mastered' : 'review'}`}>
-                                {w.status === 'mastered' ? '✅ Mastered' : '⚠️ In Review'}
-                              </span>
-                              <span className="struggled-count-tag">
-                                {w.mistakeCount ? `${w.mistakeCount}x` : '1x'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <p className="struggled-def">{w.definition}</p>
-                          {w.example && (
-                            <p className="struggled-example"><em>"{w.example}"</em></p>
-                          )}
-
-                          <div className="struggled-card-footer">
-                            <button 
-                              className="struggled-audio-btn"
-                              onClick={() => playCurrentAudio(w.word)}
-                              title="Listen to pronunciation"
-                            >
-                              🔊 Listen
-                            </button>
-                            <button 
-                              className="struggled-practice-btn"
-                              onClick={() => handlePracticeSingleWord(w)}
-                              title="Practice this single word in Dictation"
-                            >
-                              ⚡ Practice
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="install-card-helper" onClick={handleInstallClick}>
-              <div className="install-card-icon">📲</div>
-              <div className="install-card-info">
-                <strong>Add Writyy to Phone Home Screen</strong>
-                <p>Use 100% offline without internet on bus, metro, or flights.</p>
-              </div>
-              <span className="install-card-arrow">➔</span>
-            </div>
-
-            <div className="reset-bar">
-              <button className="reset-link-btn" onClick={handleResetProgress}>
-                🗑️ Reset All Progress Stacks
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* VIEW 5: ADD CUSTOM WORDS */}
-        {/* ============================================================ */}
-        {activeTab === 'add' && (
-          <div className="view-content fade-in">
-            <div className="editorial-card">
-              <div className="card-top-header">
-                <div className="academic-badge-row">
-                  <span className="card-red-pin"></span>
-                  <span className="academic-tier-name">Custom Vocabulary Intake</span>
-                </div>
-              </div>
-
-              <h2 className="hero-instruction-title">Add IELTS Words</h2>
-              <p className="card-desc">Add words from Cambridge IELTS tests to test yourself via audio dictation.</p>
-
-              {addSuccessMsg && (
-                <div className="form-success-banner">{addSuccessMsg}</div>
-              )}
-
-              <form onSubmit={handleAddWord} className="add-word-form">
-                <div className="form-field">
-                  <label>Word (English):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. ubiquitous, surveillance, discrepancy"
-                    value={newWord}
-                    onChange={(e) => setNewWord(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-row-dual">
-                  <div className="form-field">
-                    <label>Phonetics (Optional):</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. /juːˈbɪk.wɪ.təs/"
-                      value={newPhonetic}
-                      onChange={(e) => setNewPhonetic(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label>CEFR Level:</label>
-                    <select value={newLevel} onChange={(e) => setNewLevel(e.target.value)}>
-                      <option value="A1">A1 Foundation</option>
-                      <option value="A2">A2 Elementary</option>
-                      <option value="B1">B1 Intermediate</option>
-                      <option value="B2">B2 Upper / IELTS 6.5</option>
-                      <option value="C1">C1 Advanced / IELTS 7.5-9.0</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-field">
-                  <label>Definition / Translation:</label>
-                  <textarea
-                    rows="2"
-                    placeholder="Definition or meaning in your native language..."
-                    value={newDef}
-                    onChange={(e) => setNewDef(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label>Example Sentence:</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. The issue is ubiquitous in urban areas."
-                    value={newExample}
-                    onChange={(e) => setNewExample(e.target.value)}
-                  />
-                </div>
-
-                <button type="submit" className="cta-red-button">
-                  <span>Add to Vocabulary Bank</span>
-                  <span className="btn-arrow-circle">＋</span>
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Add Custom Vocabulary Modal */}
+      {showAddWordModal && (
+        <div className="modal-backdrop" onClick={() => setShowAddWordModal(false)}>
+          <div className="install-guide-modal auth-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-top">
+              <div className="auth-modal-header-brand">
+                <span className="auth-cloud-icon">➕</span>
+                <div>
+                  <h3>Add Custom Vocabulary</h3>
+                  <p className="modal-sub" style={{ margin: 0 }}>Add words from Cambridge IELTS tests for audio dictation</p>
+                </div>
+              </div>
+              <button className="modal-close-btn" onClick={() => setShowAddWordModal(false)}>✕</button>
+            </div>
+
+            {addSuccessMsg && (
+              <div className="form-success-banner" style={{ marginBottom: '14px' }}>{addSuccessMsg}</div>
+            )}
+
+            <form onSubmit={handleAddWord} className="add-word-form">
+              <div className="form-field">
+                <label>Word (English):</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. ubiquitous, surveillance, discrepancy"
+                  value={newWord}
+                  onChange={(e) => setNewWord(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-row-dual">
+                <div className="form-field">
+                  <label>Phonetics (Optional):</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. /juːˈbɪk.wɪ.təs/"
+                    value={newPhonetic}
+                    onChange={(e) => setNewPhonetic(e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>CEFR Level:</label>
+                  <select value={newLevel} onChange={(e) => setNewLevel(e.target.value)}>
+                    <option value="A1">A1 Foundation</option>
+                    <option value="A2">A2 Elementary</option>
+                    <option value="B1">B1 Intermediate</option>
+                    <option value="B2">B2 Upper / IELTS 6.5</option>
+                    <option value="C1">C1 Advanced / IELTS 7.5-9.0</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label>Definition / Translation:</label>
+                <textarea
+                  rows="2"
+                  placeholder="Definition or meaning in your native language..."
+                  value={newDef}
+                  onChange={(e) => setNewDef(e.target.value)}
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Example Sentence:</label>
+                <input
+                  type="text"
+                  placeholder="e.g. The issue is ubiquitous in urban areas."
+                  value={newExample}
+                  onChange={(e) => setNewExample(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="cta-red-button" style={{ marginTop: '10px' }}>
+                <span>Add to Vocabulary Bank</span>
+                <span className="btn-arrow-circle">＋</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* PWA Install Guide Modal for Mobile */}
       {showInstallModal && (
@@ -2868,7 +2644,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Neon Cloud Sync & Authentication Modal */}
+      {/* Account & Statistics Modal */}
       <AuthModal 
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
@@ -2876,10 +2652,21 @@ export default function App() {
         onSyncNow={handleForceSyncWithCloud}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
+        data={data}
         xpBalance={xpBalance}
         todayTested={todayTested}
         todayCorrect={todayCorrect}
         todayWrong={todayWrong}
+        total={total}
+        correct={correct}
+        wrong={wrong}
+        accuracy={accuracy}
+        estimatedBand={estimatedBand}
+        onResetProgress={handleResetProgress}
+        onOpenDownload={() => {
+          setShowAuthModal(false);
+          setShowAudioModal(true);
+        }}
         onUserAuthChange={(user, initialData) => {
           setCurrentUser(user);
           if (user && initialData) {
