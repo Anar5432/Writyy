@@ -35,8 +35,10 @@ export default function App() {
 
   // Review Mode State
   const [reviewStackType, setReviewStackType] = useState('stack2'); // 'stack2' | 'stack3'
-  const [reviewSublist, setReviewSublist] = useState('ALL'); // 'ALL' | 1..10 | 'OTHER'
-  const [reviewTabMode, setReviewTabMode] = useState('active'); // 'active' | 'history'
+  const [reviewSublist, setReviewSublist] = useState(1); // 1..10 | 'ALL' | 'OTHER'
+  const [reviewTabMode, setReviewTabMode] = useState('template'); // 'template' | 'active' | 'history'
+  const [templateFilter, setTemplateFilter] = useState('ALL'); // 'ALL' | 'WRONG' | 'MEANING' | 'MASTERED' | 'UNTESTED'
+  const [templateSearch, setTemplateSearch] = useState('');
   const [reviewQueue, setReviewQueue] = useState([]);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [reviewInput, setReviewInput] = useState('');
@@ -391,6 +393,68 @@ export default function App() {
       });
     }
     return filtered;
+  };
+
+  // Helper to extract and enrich all words for a sublist template (with Red for spelling error, Purple for unknown meaning)
+  const getSublistTemplateWords = (sublistKey) => {
+    let baseList = [];
+    if (sublistKey === 'ALL') {
+      baseList = AWL_WORDS;
+    } else if (sublistKey === 'OTHER') {
+      baseList = (data.allWords || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+      const extraStruggled = (data.struggledHistory || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+      const seen = new Set(baseList.map(w => (w.word || '').toLowerCase()));
+      extraStruggled.forEach(w => {
+        const low = (w.word || '').toLowerCase();
+        if (!seen.has(low)) {
+          seen.add(low);
+          baseList.push(w);
+        }
+      });
+    } else {
+      const slNum = Number(sublistKey);
+      baseList = AWL_WORDS_BY_SUBLIST[slNum] || [];
+    }
+
+    const s2Set = new Set((data.stack2_spelling || []).map(w => (w.word || '').toLowerCase()));
+    const s3Set = new Set((data.stack3_meaning || []).map(w => (w.word || '').toLowerCase()));
+    const s1Set = new Set((data.stack1_mastered || []).map(w => (w.word || '').toLowerCase()));
+    const struggledMap = new Map((data.struggledHistory || []).map(w => [(w.word || '').toLowerCase(), w]));
+
+    return baseList.map(w => {
+      const lower = (w.word || '').toLowerCase();
+      const hist = struggledMap.get(lower);
+      const inS2 = s2Set.has(lower);
+      const inS3 = s3Set.has(lower);
+      const inS1 = s1Set.has(lower);
+
+      const isSpellingWrong = inS2 || Boolean(hist && (hist.struggleType === 'spelling' || hist.struggleType === 'both' || (hist.mistakeCount > 0 && hist.struggleType !== 'meaning')));
+      const isMeaningUnknown = inS3 || Boolean(hist && (hist.struggleType === 'meaning' || hist.struggleType === 'both'));
+      const isMastered = !isSpellingWrong && !isMeaningUnknown && (inS1 || Boolean(hist && hist.status === 'mastered'));
+      const isUntested = !isSpellingWrong && !isMeaningUnknown && !isMastered;
+      const mistakeCount = hist?.mistakeCount || (inS2 ? 1 : 0);
+
+      let cardType = 'neutral';
+      if (isSpellingWrong && isMeaningUnknown) {
+        cardType = 'both';
+      } else if (isSpellingWrong) {
+        cardType = 'spelling';
+      } else if (isMeaningUnknown) {
+        cardType = 'meaning';
+      } else if (isMastered) {
+        cardType = 'mastered';
+      }
+
+      return {
+        ...w,
+        isSpellingWrong,
+        isMeaningUnknown,
+        isMastered,
+        isUntested,
+        mistakeCount,
+        cardType
+      };
+    });
   };
 
   // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, or reviewTabMode changes
@@ -1749,74 +1813,344 @@ export default function App() {
         {/* ============================================================ */}
         {activeTab === 'review' && (
           <div className="view-content fade-in">
-            {/* Top Review Mode Switcher: Active Due vs History Bank */}
+            {/* Top Review Mode Switcher: Template View vs Flashcard Quiz vs History Bank */}
             <div className="review-main-mode-toggle">
+              <button 
+                className={`review-mode-pill ${reviewTabMode === 'template' ? 'active' : ''}`}
+                onClick={() => setReviewTabMode('template')}
+              >
+                📑 Sublist Template View
+              </button>
               <button 
                 className={`review-mode-pill ${reviewTabMode === 'active' ? 'active' : ''}`}
                 onClick={() => setReviewTabMode('active')}
               >
-                🔥 Due for Review ({data.stack2_spelling.length + data.stack3_meaning.length})
+                🔄 Flashcard Spelling Quiz ({data.stack2_spelling.length + data.stack3_meaning.length})
               </button>
               <button 
                 className={`review-mode-pill ${reviewTabMode === 'history' ? 'active' : ''}`}
                 onClick={() => setReviewTabMode('history')}
               >
-                📚 Review History Bank ({data.struggledHistory?.length || 0})
+                📚 Raw History Bank ({data.struggledHistory?.length || 0})
               </button>
             </div>
 
-            {/* Stack Switcher Tabs */}
-            <div className="review-toggle-bar">
-              <button 
-                className={`review-stack-btn ${reviewStackType === 'stack2' ? 'active-s2' : ''}`}
-                onClick={() => setReviewStackType('stack2')}
-              >
-                📝 Stack 2: Spelling ({reviewTabMode === 'active' ? data.stack2_spelling.length : (data.struggledHistory || []).filter(w => w.struggleType === 'spelling' || w.struggleType === 'both').length})
-              </button>
-              <button 
-                className={`review-stack-btn ${reviewStackType === 'stack3' ? 'active-s3' : ''}`}
-                onClick={() => setReviewStackType('stack3')}
-              >
-                💡 Stack 3: Meaning ({reviewTabMode === 'active' ? data.stack3_meaning.length : (data.struggledHistory || []).filter(w => w.struggleType === 'meaning' || w.struggleType === 'both').length})
-              </button>
-            </div>
+            {/* Stack Switcher Tabs (Shown for Flashcard Quiz & History Bank modes) */}
+            {reviewTabMode !== 'template' && (
+              <div className="review-toggle-bar">
+                <button 
+                  className={`review-stack-btn ${reviewStackType === 'stack2' ? 'active-s2' : ''}`}
+                  onClick={() => setReviewStackType('stack2')}
+                >
+                  📝 Stack 2: Spelling ({reviewTabMode === 'active' ? data.stack2_spelling.length : (data.struggledHistory || []).filter(w => w.struggleType === 'spelling' || w.struggleType === 'both').length})
+                </button>
+                <button 
+                  className={`review-stack-btn ${reviewStackType === 'stack3' ? 'active-s3' : ''}`}
+                  onClick={() => setReviewStackType('stack3')}
+                >
+                  💡 Stack 3: Meaning ({reviewTabMode === 'active' ? data.stack3_meaning.length : (data.struggledHistory || []).filter(w => w.struggleType === 'meaning' || w.struggleType === 'both').length})
+                </button>
+              </div>
+            )}
 
-            {/* AWL Sublist Filter Pills for Review Mode */}
+            {/* AWL Sublist Filter Pills for Review Mode with Error Indicators */}
             <div className="review-awl-pills-row">
-              <button
-                className={`review-sub-pill ${reviewSublist === 'ALL' ? 'active' : ''}`}
-                onClick={() => setReviewSublist('ALL')}
-              >
-                All
-              </button>
               {AWL_SUBLISTS.map(sl => {
-                const sourceList = reviewTabMode === 'active'
-                  ? (reviewStackType === 'stack2' ? data.stack2_spelling : data.stack3_meaning)
-                  : (data.struggledHistory || []).filter(w => reviewStackType === 'stack2' ? (w.struggleType === 'spelling' || w.struggleType === 'both') : (w.struggleType === 'meaning' || w.struggleType === 'both'));
-                const count = sourceList.filter(w => {
-                  const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-                  return sub === sl;
-                }).length;
+                const slWords = getSublistTemplateWords(sl);
+                const redCount = slWords.filter(w => w.isSpellingWrong).length;
+                const purpleCount = slWords.filter(w => w.isMeaningUnknown).length;
+                const isSelected = String(reviewSublist) === String(sl);
                 return (
                   <button
                     key={sl}
-                    className={`review-sub-pill ${reviewSublist === sl ? 'active' : ''}`}
+                    className={`review-sub-pill ${isSelected ? 'active' : ''}`}
                     onClick={() => setReviewSublist(sl)}
                   >
-                    Sub {sl}
-                    {count > 0 && <span className="review-count-badge">{count}</span>}
+                    <span>Sub {sl}</span>
+                    {(redCount > 0 || purpleCount > 0) && (
+                      <span className="sub-pill-error-dots">
+                        {redCount > 0 && <span className="dot-red" title={`${redCount} written wrong`}>{redCount}</span>}
+                        {purpleCount > 0 && <span className="dot-purple" title={`${purpleCount} unknown meaning`}>{purpleCount}</span>}
+                      </span>
+                    )}
                   </button>
                 );
               })}
               <button
+                className={`review-sub-pill ${reviewSublist === 'ALL' ? 'active' : ''}`}
+                onClick={() => setReviewSublist('ALL')}
+              >
+                <span>All AWL</span>
+              </button>
+              <button
                 className={`review-sub-pill ${reviewSublist === 'OTHER' ? 'active' : ''}`}
                 onClick={() => setReviewSublist('OTHER')}
               >
-                Other
+                <span>Other</span>
               </button>
             </div>
 
-            {reviewTabMode === 'active' ? (
+            {reviewTabMode === 'template' ? (
+              (() => {
+                const templateAllWords = getSublistTemplateWords(reviewSublist);
+                const countWrong = templateAllWords.filter(w => w.isSpellingWrong).length;
+                const countMeaning = templateAllWords.filter(w => w.isMeaningUnknown).length;
+                const countMastered = templateAllWords.filter(w => w.isMastered).length;
+                const countUntested = templateAllWords.filter(w => w.isUntested).length;
+
+                const templateFilteredWords = templateAllWords.filter(w => {
+                  if (templateFilter === 'WRONG' && !w.isSpellingWrong) return false;
+                  if (templateFilter === 'MEANING' && !w.isMeaningUnknown) return false;
+                  if (templateFilter === 'MASTERED' && !w.isMastered) return false;
+                  if (templateFilter === 'UNTESTED' && !w.isUntested) return false;
+
+                  if (templateSearch.trim()) {
+                    const q = templateSearch.trim().toLowerCase();
+                    const matchWord = (w.word || '').toLowerCase().includes(q);
+                    const matchDef = (w.definition || '').toLowerCase().includes(q);
+                    const matchPos = (w.pos || '').toLowerCase().includes(q);
+                    if (!matchWord && !matchDef && !matchPos) return false;
+                  }
+                  return true;
+                });
+
+                const sublistTitle = reviewSublist === 'ALL'
+                  ? 'Complete AWL Vocabulary Template (All 570 Words)'
+                  : reviewSublist === 'OTHER'
+                  ? 'Custom & Non-AWL Vocabulary Template'
+                  : `Academic Word List (AWL) - Sublist ${reviewSublist} Template`;
+
+                return (
+                  <div className="template-view-container">
+                    {/* Header Summary Banner */}
+                    <div className="template-header-card">
+                      <div className="template-header-info">
+                        <div className="template-title-row">
+                          <h3 className="template-title">{sublistTitle}</h3>
+                          <span className="template-total-badge">{templateAllWords.length} Words Total</span>
+                        </div>
+                        <p className="template-subtitle">
+                          Structured headword template with definitions and native audio. Words you have written wrong are highlighted in <strong className="text-red-tag">RED</strong>, and words with unknown meanings are marked in <strong className="text-purple-tag">PURPLE</strong>.
+                        </p>
+                      </div>
+
+                      {/* Quick Metrics Bar */}
+                      <div className="template-stats-bar">
+                        <div 
+                          className={`stat-pill stat-total ${templateFilter === 'ALL' ? 'active-filter' : ''}`} 
+                          onClick={() => setTemplateFilter('ALL')}
+                        >
+                          <span className="stat-num">{templateAllWords.length}</span>
+                          <span className="stat-lbl">Sublist Words</span>
+                        </div>
+                        <div 
+                          className={`stat-pill stat-red ${countWrong > 0 ? 'has-items' : ''} ${templateFilter === 'WRONG' ? 'active-filter' : ''}`} 
+                          onClick={() => setTemplateFilter('WRONG')}
+                        >
+                          <span className="stat-num">🔴 {countWrong}</span>
+                          <span className="stat-lbl">Written Wrong</span>
+                        </div>
+                        <div 
+                          className={`stat-pill stat-purple ${countMeaning > 0 ? 'has-items' : ''} ${templateFilter === 'MEANING' ? 'active-filter' : ''}`} 
+                          onClick={() => setTemplateFilter('MEANING')}
+                        >
+                          <span className="stat-num">🟣 {countMeaning}</span>
+                          <span className="stat-lbl">Unknown Meaning</span>
+                        </div>
+                        <div 
+                          className={`stat-pill stat-green ${templateFilter === 'MASTERED' ? 'active-filter' : ''}`} 
+                          onClick={() => setTemplateFilter('MASTERED')}
+                        >
+                          <span className="stat-num">🟢 {countMastered}</span>
+                          <span className="stat-lbl">Mastered</span>
+                        </div>
+                        <div 
+                          className={`stat-pill stat-neutral ${templateFilter === 'UNTESTED' ? 'active-filter' : ''}`} 
+                          onClick={() => setTemplateFilter('UNTESTED')}
+                        >
+                          <span className="stat-num">⚪ {countUntested}</span>
+                          <span className="stat-lbl">Ready / Untested</span>
+                        </div>
+                      </div>
+
+                      {(countWrong > 0 || countMeaning > 0) && (
+                        <div className="template-action-row">
+                          <button
+                            className="cta-red-button btn-compact"
+                            onClick={() => handleRepeatSublistStruggledInStudy(reviewSublist)}
+                          >
+                            ⚡ Practice All Problem Words in Dictation ({countWrong + countMeaning})
+                          </button>
+                          <button
+                            className="ghost-pill-btn btn-compact"
+                            onClick={() => {
+                              setReviewTabMode('active');
+                              setReviewStackType(countWrong > 0 ? 'stack2' : 'stack3');
+                            }}
+                          >
+                            🔄 Quiz Review Mode ({countWrong + countMeaning} due)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Filters & Instant Search Bar */}
+                    <div className="template-controls-bar">
+                      <div className="template-filter-chips">
+                        <button 
+                          className={`filter-chip-btn ${templateFilter === 'ALL' ? 'active' : ''}`}
+                          onClick={() => setTemplateFilter('ALL')}
+                        >
+                          All ({templateAllWords.length})
+                        </button>
+                        <button 
+                          className={`filter-chip-btn chip-red ${templateFilter === 'WRONG' ? 'active' : ''}`}
+                          onClick={() => setTemplateFilter('WRONG')}
+                        >
+                          🔴 Written Wrong ({countWrong})
+                        </button>
+                        <button 
+                          className={`filter-chip-btn chip-purple ${templateFilter === 'MEANING' ? 'active' : ''}`}
+                          onClick={() => setTemplateFilter('MEANING')}
+                        >
+                          🟣 Meaning Unknown ({countMeaning})
+                        </button>
+                        <button 
+                          className={`filter-chip-btn chip-green ${templateFilter === 'MASTERED' ? 'active' : ''}`}
+                          onClick={() => setTemplateFilter('MASTERED')}
+                        >
+                          🟢 Mastered ({countMastered})
+                        </button>
+                        <button 
+                          className={`filter-chip-btn chip-neutral ${templateFilter === 'UNTESTED' ? 'active' : ''}`}
+                          onClick={() => setTemplateFilter('UNTESTED')}
+                        >
+                          ⚪ Untested ({countUntested})
+                        </button>
+                      </div>
+
+                      <div className="template-search-wrap">
+                        <span className="search-icon">🔍</span>
+                        <input 
+                          type="text"
+                          className="template-search-input"
+                          placeholder={`Search in ${reviewSublist === 'ALL' ? 'all AWL' : `Sublist ${reviewSublist}`} words...`}
+                          value={templateSearch}
+                          onChange={(e) => setTemplateSearch(e.target.value)}
+                        />
+                        {templateSearch && (
+                          <button className="clear-search-btn" onClick={() => setTemplateSearch('')}>×</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Word Cards Grid */}
+                    {templateFilteredWords.length === 0 ? (
+                      <div className="empty-struggled-banner">
+                        <span>No words match the selected filter ({templateFilter}).</span>
+                        <button className="ghost-pill-btn btn-compact" onClick={() => { setTemplateFilter('ALL'); setTemplateSearch(''); }}>
+                          Show All Words
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="template-words-grid">
+                        {templateFilteredWords.map((w, idx) => (
+                          <div 
+                            key={w.id || `${w.word}-${idx}`} 
+                            className={`template-word-card ${
+                              w.cardType === 'both' ? 'card-border-both' :
+                              w.cardType === 'spelling' ? 'card-border-red' :
+                              w.cardType === 'meaning' ? 'card-border-purple' :
+                              w.cardType === 'mastered' ? 'card-border-green' : 'card-border-neutral'
+                            }`}
+                          >
+                            <div className="template-card-header">
+                              <div className="template-word-name-group">
+                                <div className="template-word-title-row">
+                                  <h4 className="template-word-title">{w.word}</h4>
+                                  <button 
+                                    className="template-inline-audio-btn"
+                                    onClick={() => playCurrentAudio(w.word)}
+                                    title={`Listen to pronunciation of ${w.word}`}
+                                  >
+                                    🔊
+                                  </button>
+                                </div>
+                                <div className="template-word-meta-row">
+                                  <span className="template-phonetic">{w.phonetic || `/${w.word}/`}</span>
+                                  <span className="template-pos-pill">{w.pos}</span>
+                                  <span className="template-sublist-pill">
+                                    {w.awlSublist ? `AWL Sub ${w.awlSublist}` : w.level}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="template-card-badges-group">
+                                {w.isSpellingWrong && (
+                                  <span className="template-badge badge-red" title="Spelling error in this word">
+                                    🔴 Written Wrong {w.mistakeCount > 1 ? `(${w.mistakeCount}x)` : ''}
+                                  </span>
+                                )}
+                                {w.isMeaningUnknown && (
+                                  <span className="template-badge badge-purple" title="Meaning was unknown">
+                                    🟣 Meaning Unknown
+                                  </span>
+                                )}
+                                {w.isMastered && (
+                                  <span className="template-badge badge-green" title="Mastered">
+                                    ✅ Mastered
+                                  </span>
+                                )}
+                                {w.isUntested && (
+                                  <span className="template-badge badge-neutral" title="Ready to learn">
+                                    ⚪ Ready
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="template-card-body">
+                              <p className="template-def-text">
+                                <strong className="def-label">Meaning:</strong> {w.definition}
+                              </p>
+                              {w.example && (
+                                <p className="template-example-text">
+                                  <strong className="example-label">Example:</strong> <em>"{w.example}"</em>
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="template-card-footer">
+                              <button 
+                                className="template-btn-audio"
+                                onClick={() => playCurrentAudio(w.word)}
+                                title="Listen to native pronunciation"
+                              >
+                                🔊 Listen Word
+                              </button>
+                              <button 
+                                className="template-btn-speak-def"
+                                onClick={() => playCurrentAudio(w.definition)}
+                                title="Listen to meaning read aloud"
+                              >
+                                🗣️ Read Meaning
+                              </button>
+                              <button 
+                                className="template-btn-practice"
+                                onClick={() => handlePracticeSingleWord(w)}
+                                title="Practice this word in Dictation"
+                              >
+                                ⚡ Practice Word
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : reviewTabMode === 'active' ? (
               reviewQueue.length > 0 && currentReviewWord ? (
                 <div className="editorial-card review-mode-card">
                   <div className="card-top-header">
@@ -2066,6 +2400,12 @@ export default function App() {
                         </button>
                       ) : null;
                     })()}
+                    <button
+                      className="ghost-pill-btn"
+                      onClick={() => setReviewTabMode('template')}
+                    >
+                      📑 View Sublist Template View
+                    </button>
                     <button
                       className="ghost-pill-btn"
                       onClick={() => setReviewTabMode('history')}
