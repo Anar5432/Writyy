@@ -36,7 +36,7 @@ export default function App() {
   // Review Mode State
   const [reviewStackType, setReviewStackType] = useState('stack2'); // 'stack2' | 'stack3'
   const [reviewSublist, setReviewSublist] = useState(1); // 1..10 | 'ALL' | 'OTHER'
-  const [reviewTabMode, setReviewTabMode] = useState('template'); // 'template' | 'active' | 'history'
+  const [reviewTabMode, setReviewTabMode] = useState('template'); // 'template' | 'active'
   const [templateFilter, setTemplateFilter] = useState('ALL'); // 'ALL' | 'WRONG' | 'MEANING' | 'MASTERED' | 'UNTESTED'
   const [templateSearch, setTemplateSearch] = useState('');
   const [reviewQueue, setReviewQueue] = useState([]);
@@ -366,19 +366,8 @@ export default function App() {
   }, [selectedLevel, selectedAwlSublist, data.allWords.length]);
 
   // Helper to compute filtered review queue from any state
-  const buildFilteredReviewQueue = (sourceData = data, stackType = reviewStackType, sublist = reviewSublist, tabMode = reviewTabMode) => {
-    let sourceList = [];
-    if (tabMode === 'active') {
-      sourceList = stackType === 'stack2' ? (sourceData.stack2_spelling || []) : (sourceData.stack3_meaning || []);
-    } else {
-      // Review History / Repetition Bank: all words ever struggled with
-      sourceList = sourceData.struggledHistory || [];
-      if (stackType === 'stack2') {
-        sourceList = sourceList.filter(w => w.struggleType === 'spelling' || w.struggleType === 'both');
-      } else if (stackType === 'stack3') {
-        sourceList = sourceList.filter(w => w.struggleType === 'meaning' || w.struggleType === 'both');
-      }
-    }
+  const buildFilteredReviewQueue = (sourceData = data, stackType = reviewStackType, sublist = reviewSublist) => {
+    let sourceList = stackType === 'stack2' ? (sourceData.stack2_spelling || []) : (sourceData.stack3_meaning || []);
 
     let filtered = sourceList.map(enrichWordWithAwl);
     if (sublist === 'ALL') {
@@ -460,7 +449,7 @@ export default function App() {
   // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, or reviewTabMode changes
   useEffect(() => {
     if (activeTab === 'review') {
-      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist, reviewTabMode);
+      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist);
       setReviewQueue(filtered);
       setReviewIndex(0);
       resetReviewInputs();
@@ -468,14 +457,13 @@ export default function App() {
   }, [
     activeTab, 
     reviewStackType, 
-    reviewSublist, 
-    reviewTabMode
+    reviewSublist
   ]);
 
   // If cloud data finishes loading and reviewQueue was empty, populate it without disrupting active review
   useEffect(() => {
     if (activeTab === 'review' && reviewQueue.length === 0 && !reviewSubmitted) {
-      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist, reviewTabMode);
+      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist);
       if (filtered.length > 0) {
         setReviewQueue(filtered);
         setReviewIndex(0);
@@ -1001,7 +989,7 @@ export default function App() {
       resetReviewInputs();
     } else {
       showToast('🎉 Review batch completed! Resetting to start.');
-      const refreshed = buildFilteredReviewQueue(data, reviewStackType, reviewSublist, reviewTabMode);
+      const refreshed = buildFilteredReviewQueue(data, reviewStackType, reviewSublist);
       setReviewQueue(refreshed);
       setReviewIndex(0);
       resetReviewInputs();
@@ -1813,7 +1801,7 @@ export default function App() {
         {/* ============================================================ */}
         {activeTab === 'review' && (
           <div className="view-content fade-in">
-            {/* Top Review Mode Switcher: Template View vs Flashcard Quiz vs History Bank */}
+            {/* Top Review Mode Switcher: Template View vs Flashcard Quiz */}
             <div className="review-main-mode-toggle">
               <button 
                 className={`review-mode-pill ${reviewTabMode === 'template' ? 'active' : ''}`}
@@ -1827,28 +1815,22 @@ export default function App() {
               >
                 🔄 Flashcard Spelling Quiz ({data.stack2_spelling.length + data.stack3_meaning.length})
               </button>
-              <button 
-                className={`review-mode-pill ${reviewTabMode === 'history' ? 'active' : ''}`}
-                onClick={() => setReviewTabMode('history')}
-              >
-                📚 Raw History Bank ({data.struggledHistory?.length || 0})
-              </button>
             </div>
 
-            {/* Stack Switcher Tabs (Shown for Flashcard Quiz & History Bank modes) */}
+            {/* Stack Switcher Tabs (Shown for Flashcard Quiz mode) */}
             {reviewTabMode !== 'template' && (
               <div className="review-toggle-bar">
                 <button 
                   className={`review-stack-btn ${reviewStackType === 'stack2' ? 'active-s2' : ''}`}
                   onClick={() => setReviewStackType('stack2')}
                 >
-                  📝 Stack 2: Spelling ({reviewTabMode === 'active' ? data.stack2_spelling.length : (data.struggledHistory || []).filter(w => w.struggleType === 'spelling' || w.struggleType === 'both').length})
+                  📝 Stack 2: Spelling ({data.stack2_spelling.length})
                 </button>
                 <button 
                   className={`review-stack-btn ${reviewStackType === 'stack3' ? 'active-s3' : ''}`}
                   onClick={() => setReviewStackType('stack3')}
                 >
-                  💡 Stack 3: Meaning ({reviewTabMode === 'active' ? data.stack3_meaning.length : (data.struggledHistory || []).filter(w => w.struggleType === 'meaning' || w.struggleType === 'both').length})
+                  💡 Stack 3: Meaning ({data.stack3_meaning.length})
                 </button>
               </div>
             )}
@@ -1916,8 +1898,22 @@ export default function App() {
 
                 return (
                   <div className="template-view-container">
-                    {/* Compact Filter Chips & Instant Search Bar */}
+                    {/* Compact Search Bar & Filter Chips (No wasted space) */}
                     <div className="template-controls-bar">
+                      <div className="template-search-wrap">
+                        <span className="search-icon">🔍</span>
+                        <input 
+                          type="text"
+                          className="template-search-input"
+                          placeholder={`Search in ${reviewSublist === 'ALL' ? 'all AWL' : `Sublist ${reviewSublist}`} words...`}
+                          value={templateSearch}
+                          onChange={(e) => setTemplateSearch(e.target.value)}
+                        />
+                        {templateSearch && (
+                          <button className="clear-search-btn" onClick={() => setTemplateSearch('')} aria-label="Clear search">×</button>
+                        )}
+                      </div>
+
                       <div className="template-filter-chips">
                         <button 
                           className={`filter-chip-btn ${templateFilter === 'ALL' ? 'active' : ''}`}
@@ -1949,20 +1945,6 @@ export default function App() {
                         >
                           ⚪ Untested ({countUntested})
                         </button>
-                      </div>
-
-                      <div className="template-search-wrap">
-                        <span className="search-icon">🔍</span>
-                        <input 
-                          type="text"
-                          className="template-search-input"
-                          placeholder={`Search in ${reviewSublist === 'ALL' ? 'all AWL' : `Sublist ${reviewSublist}`} words...`}
-                          value={templateSearch}
-                          onChange={(e) => setTemplateSearch(e.target.value)}
-                        />
-                        {templateSearch && (
-                          <button className="clear-search-btn" onClick={() => setTemplateSearch('')}>×</button>
-                        )}
                       </div>
                     </div>
 
@@ -2069,7 +2051,7 @@ export default function App() {
                   </div>
                 );
               })()
-            ) : reviewTabMode === 'active' ? (
+            ) : (
               reviewQueue.length > 0 && currentReviewWord ? (
                 <div className="editorial-card review-mode-card">
                   <div className="card-top-header">
@@ -2325,12 +2307,6 @@ export default function App() {
                     >
                       📑 View Sublist Template View
                     </button>
-                    <button
-                      className="ghost-pill-btn"
-                      onClick={() => setReviewTabMode('history')}
-                    >
-                      📖 View Review History Bank
-                    </button>
                     <button 
                       className="cta-navy-button"
                       onClick={() => setActiveTab('study')}
@@ -2340,81 +2316,6 @@ export default function App() {
                   </div>
                 </div>
               )
-            ) : (
-              /* Review History Bank View inside Review Tab */
-              <div className="review-history-container">
-                <div className="history-header-bar">
-                  <div>
-                    <h3 className="history-title">
-                      {reviewSublist === 'ALL' ? 'Complete Review History Bank' : `Sublist ${reviewSublist} History Bank`}
-                    </h3>
-                    <p className="history-subtitle">
-                      {reviewQueue.length} words saved. All words you have ever struggled with are preserved here for repetition.
-                    </p>
-                  </div>
-                  {reviewQueue.length > 0 && (
-                    <button
-                      className="cta-red-button btn-compact"
-                      onClick={() => handleRepeatSublistStruggledInStudy(reviewSublist)}
-                    >
-                      ⚡ Practice All in Dictation ({reviewQueue.length})
-                    </button>
-                  )}
-                </div>
-
-                {reviewQueue.length === 0 ? (
-                  <div className="empty-struggled-banner">
-                    <span>No words recorded in history for this filter yet.</span>
-                  </div>
-                ) : (
-                  <div className="struggled-words-grid">
-                    {reviewQueue.map((w, idx) => (
-                      <div key={w.id || idx} className="struggled-word-card">
-                        <div className="struggled-card-header">
-                          <div className="struggled-word-name-group">
-                            <h4 className="struggled-word-name">{w.word}</h4>
-                            <span className="struggled-phonetic">{w.phonetic || `/${w.word}/`}</span>
-                            <span className="struggled-pos">{w.pos}</span>
-                            <span className="struggled-level-tag">
-                              {w.awlSublist ? `AWL Sub ${w.awlSublist}` : w.level}
-                            </span>
-                          </div>
-                          <div className="struggled-badges-group">
-                            <span className={`struggled-status-badge ${w.status === 'mastered' ? 'mastered' : 'review'}`}>
-                              {w.status === 'mastered' ? '✅ Mastered' : '⚠️ In Review'}
-                            </span>
-                            <span className="struggled-count-tag">
-                              {w.mistakeCount ? `${w.mistakeCount}x` : '1x'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <p className="struggled-def">{w.definition}</p>
-                        {w.example && (
-                          <p className="struggled-example"><em>"{w.example}"</em></p>
-                        )}
-
-                        <div className="struggled-card-footer">
-                          <button 
-                            className="struggled-audio-btn"
-                            onClick={() => playCurrentAudio(w.word)}
-                            title="Listen to pronunciation"
-                          >
-                            🔊 Listen
-                          </button>
-                          <button 
-                            className="struggled-practice-btn"
-                            onClick={() => handlePracticeSingleWord(w)}
-                            title="Practice this single word in Dictation"
-                          >
-                            ⚡ Practice
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             )}
           </div>
         )}

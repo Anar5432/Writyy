@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v22-compact-template-design';
+const CACHE_NAME = 'writyy-v23-streamlined-controls';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [

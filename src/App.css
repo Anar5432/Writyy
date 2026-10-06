@@ -2697,7 +2697,8 @@ html, body {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 4px 2px 8px 2px;
+  padding: 2px 2px 6px 2px;
+  margin-bottom: 2px;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
@@ -3369,7 +3370,7 @@ html, body {
 .template-view-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   animation: fadeIn 0.25s ease-out;
 }
 
@@ -3406,38 +3407,93 @@ html, body {
   line-height: 1.2;
 }
 
-/* Template Controls Bar (Filter Chips + Search) */
+/* Template Controls Bar (Search Bar + Filter Chips in sleek compact layout) */
 .template-controls-bar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 2px;
+  gap: 8px;
+  margin-top: 2px;
+  margin-bottom: 4px;
 }
 
-@media (min-width: 768px) {
-  .template-controls-bar {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
+.template-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.template-search-wrap .search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.template-search-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 34px 0 34px;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-pill);
+  font-size: 0.82rem;
+  outline: none;
+  background: #ffffff;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.template-search-input:focus {
+  border-color: var(--royal-blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 1.15rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-search-btn:hover {
+  color: var(--text-dark);
 }
 
 .template-filter-chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 1px 4px 1px;
+}
+
+.template-filter-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .filter-chip-btn {
   background: #ffffff;
   border: 1.5px solid var(--border-light);
   border-radius: var(--radius-pill);
-  padding: 5px 11px;
+  padding: 5px 12px;
   font-size: 0.76rem;
   font-weight: 700;
   color: var(--text-dark);
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
@@ -3474,48 +3530,6 @@ html, body {
   background: #64748b;
   border-color: #64748b;
   color: #ffffff;
-}
-
-.template-search-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 240px;
-}
-
-.template-search-wrap .search-icon {
-  position: absolute;
-  left: 10px;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
-.template-search-input {
-  width: 100%;
-  padding: 7px 30px 7px 28px;
-  border: 1.5px solid var(--border-light);
-  border-radius: var(--radius-pill);
-  font-size: 0.8rem;
-  outline: none;
-  background: #ffffff;
-  transition: border-color 0.15s ease;
-}
-
-.template-search-input:focus {
-  border-color: var(--royal-blue);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-}
-
-.clear-search-btn {
-  position: absolute;
-  right: 10px;
-  background: none;
-  border: none;
-  font-size: 1.1rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  line-height: 1;
 }
 
 /* Smooth color borders for Image 3 compact card design */
