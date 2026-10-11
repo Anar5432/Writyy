@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v26-notion-notes-desk';
+const CACHE_NAME = 'writyy-v27-apple-minimal-notes';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [

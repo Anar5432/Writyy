@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const EMOJI_PALETTE = [
-  '📝', '💡', '🎯', '📖', '⚡', '📌', '🌟', '✍️',
+  '📝', '💡', '⚡', '🎯', '📖', '📌', '🌟', '✍️',
   '🧠', '💬', '🏆', '📚', '🚀', '🔍', '🎨', '🏛️',
   '🎓', '🧪', '🔑', '📑'
 ];
@@ -14,87 +14,6 @@ const NOTE_TAGS = [
   'Grammar',
   'Ideas',
   'General'
-];
-
-const TEMPLATES = [
-  {
-    name: '💡 IELTS Essay Collocations',
-    desc: 'High-scoring phrase patterns for Task 2 essays',
-    icon: '💡',
-    tag: 'IELTS',
-    content: `### High-Band Academic Collocations for Essays
-
-• **play a pivotal role in**
-  e.g. *Higher education plays a pivotal role in promoting social mobility.*
-
-• **exert a profound influence on**
-  e.g. *Technological innovations exert a profound influence on the job market.*
-
-• **pose a severe threat to**
-  e.g. *Plastic pollution poses a severe threat to marine ecosystems.*
-
-• **reap substantial benefits from**
-  e.g. *Students reap substantial benefits from early bilingual education.*
-
-• **bridge the socioeconomic divide**
-  e.g. *Subsidized public transit helps bridge the socioeconomic divide in metropolitan areas.*
-
-• **strike a delicate balance between**
-  e.g. *Policy makers must strike a delicate balance between industrial expansion and green conservation.*`
-  },
-  {
-    name: '⚡ Tricky Spelling Checklist',
-    desc: 'Checklist of high-frequency commonly misspelled words',
-    icon: '⚡',
-    tag: 'Spelling',
-    content: `### High-Frequency IELTS Misspellings Checklist
-
-[ ] accommodate (double 'c', double 'm')
-[ ] privilege (no 'd', ends in -ege)
-[ ] conscientious (c-i-e-n)
-[ ] embarrassment (double 'r', double 's')
-[ ] pronunciation (pro-NUN-ciation, not pronounce)
-[ ] hierarchy (i before e)
-[ ] definitely (finite inside definitely: d-e-f-i-n-i-t-e-l-y)
-[ ] gauge (g-a-u-g-e)
-[ ] noticeable (keep the 'e' before -able)
-
-> 💡 Rule of Thumb: When a word ends with a silent 'e', drop it before adding an -ing or -able suffix (argue → arguing).`
-  },
-  {
-    name: '🎯 Word Family & Root Words',
-    desc: 'Deep-dive word derivation matrix (Noun, Verb, Adj, Adv)',
-    icon: '🎯',
-    tag: 'Vocabulary',
-    content: `### Word Family Matrix: Analyze (AWL Sublist 1)
-
-• **Verb**: analyze (examine methodically)
-• **Noun**: analysis, analyzer
-• **Adjective**: analytical, analytic
-• **Adverb**: analytically
-
-### Essential Collocations:
-• *conduct a rigorous analysis of the data*
-• *provide an analytical framework*
-• *closer analysis reveals that...*`
-  },
-  {
-    name: '🏛️ IELTS Task 2 Idea Bank',
-    desc: 'Pros & cons argument structure for IELTS topics',
-    icon: '🏛️',
-    tag: 'Ideas',
-    content: `### Topic: Remote Work & Automation in Modern Society
-
-### Arguments In Favor:
-• **Flexibility & Work-Life Balance**: Cuts commuting time, reduces carbon footprint.
-• **Global Talent Access**: Employers can recruit skilled workers regardless of geographic borders.
-
-### Arguments Against / Concerns:
-• **Social Isolation**: Lack of face-to-face interaction damages teamwork and mental wellbeing.
-• **Blurred Boundaries**: Workers struggle to disconnect after formal work hours.
-
-> 💡 Conclusion Synthesis: While telecommuting improves productivity, hybrid arrangements offer the optimal compromise.`
-  }
 ];
 
 export default function NotesView({ 
@@ -112,7 +31,6 @@ export default function NotesView({
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState('ALL'); // 'ALL' | 'PINNED' | tag name
-  const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // Editor State
@@ -124,16 +42,12 @@ export default function NotesView({
   const [isInteractivePreview, setIsInteractivePreview] = useState(false);
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving'
 
-  const templateMenuRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Close popups on outside click
+  // Close emoji popup on outside click
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (templateMenuRef.current && !templateMenuRef.current.contains(e.target)) {
-        setShowTemplateMenu(false);
-      }
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
         setShowEmojiPicker(false);
       }
@@ -177,33 +91,7 @@ export default function NotesView({
     setIsInteractivePreview(false);
     setViewMode('editor');
     onSaveNote(newNote);
-    showToast('✨ Created new note');
-  };
-
-  // Apply a template
-  const handleApplyTemplate = (tpl) => {
-    const newId = `note_${Date.now()}`;
-    const newNote = {
-      id: newId,
-      title: tpl.name.replace(/^[^\w\s]+/, '').trim(),
-      icon: tpl.icon,
-      tag: tpl.tag,
-      pinned: false,
-      content: tpl.content,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setShowTemplateMenu(false);
-    setActiveNoteId(newId);
-    setEditorTitle(newNote.title);
-    setEditorContent(newNote.content);
-    setEditorIcon(newNote.icon);
-    setEditorTag(newNote.tag);
-    setEditorPinned(false);
-    setIsInteractivePreview(false);
-    setViewMode('editor');
-    onSaveNote(newNote);
-    showToast(`📋 Created note from "${tpl.name}"`);
+    showToast('✨ New note created');
   };
 
   // Auto-save changes with debounced persistence
@@ -224,10 +112,10 @@ export default function NotesView({
     onSaveNote(updatedNote);
     setTimeout(() => {
       setSaveStatus('saved');
-    }, 300);
+    }, 250);
   };
 
-  // Quick insertion helpers for Notion blocks
+  // Quick insertion helpers
   const handleInsertBlock = (prefix, placeholder = '') => {
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -287,7 +175,7 @@ export default function NotesView({
   const handleCopyNoteText = (note) => {
     const fullText = `# ${note.title}\n\n${note.content || ''}`;
     navigator.clipboard.writeText(fullText).then(() => {
-      showToast('📋 Note copied to clipboard');
+      showToast('📋 Copied to clipboard');
     }).catch(() => {
       showToast('⚠️ Could not copy text');
     });
@@ -295,7 +183,7 @@ export default function NotesView({
 
   // Delete note with confirmation
   const handleDeleteCurrentNote = () => {
-    if (window.confirm(`Delete note "${editorTitle || 'Untitled'}"?`)) {
+    if (window.confirm(`Delete "${editorTitle || 'Untitled'}"?`)) {
       onDeleteNote(activeNoteId);
       setViewMode('list');
       setActiveNoteId(null);
@@ -360,7 +248,7 @@ export default function NotesView({
   // Parse lines into clean markdown-like nodes
   const renderFormattedLines = (content = '', noteId = activeNoteId) => {
     if (!content) {
-      return <p className="notion-empty-body">Click here to write notes, collocations, or spelling rules...</p>;
+      return <p className="apple-empty-body">Tap "Edit Text" to start typing...</p>;
     }
 
     const lines = content.split('\n');
@@ -370,7 +258,7 @@ export default function NotesView({
       // Heading 3
       if (trimmed.startsWith('### ')) {
         return (
-          <h3 key={idx} className="notion-block-h3">
+          <h3 key={idx} className="apple-block-h3">
             {trimmed.replace(/^###\s+/, '')}
           </h3>
         );
@@ -379,7 +267,7 @@ export default function NotesView({
       // Heading 2
       if (trimmed.startsWith('## ')) {
         return (
-          <h2 key={idx} className="notion-block-h2">
+          <h2 key={idx} className="apple-block-h2">
             {trimmed.replace(/^##\s+/, '')}
           </h2>
         );
@@ -390,10 +278,10 @@ export default function NotesView({
         const isChecked = line.includes('[x]') || line.includes('[X]');
         const textPart = line.replace(/\[[ xX]\]/, '').trim();
         return (
-          <div key={idx} className={`notion-block-todo ${isChecked ? 'done' : ''}`}>
+          <div key={idx} className={`apple-block-todo ${isChecked ? 'done' : ''}`}>
             <button 
               type="button"
-              className={`notion-checkbox-btn ${isChecked ? 'checked' : ''}`}
+              className={`apple-checkbox-btn ${isChecked ? 'checked' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 handleToggleCheckbox(idx, line, noteId);
@@ -402,7 +290,7 @@ export default function NotesView({
             >
               {isChecked ? '✓' : ''}
             </button>
-            <span className="notion-todo-text">{textPart}</span>
+            <span className="apple-todo-text">{textPart}</span>
           </div>
         );
       }
@@ -410,7 +298,7 @@ export default function NotesView({
       // Callout quote >
       if (trimmed.startsWith('> ')) {
         return (
-          <div key={idx} className="notion-block-callout">
+          <div key={idx} className="apple-block-callout">
             <span className="callout-symbol">💡</span>
             <span className="callout-text">{trimmed.replace(/^>\s+💡?\s*/, '')}</span>
           </div>
@@ -421,7 +309,7 @@ export default function NotesView({
       if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
         const bulletText = trimmed.replace(/^[•\-\*]\s+/, '');
         return (
-          <div key={idx} className="notion-block-bullet">
+          <div key={idx} className="apple-block-bullet">
             <span className="bullet-dot">•</span>
             <span className="bullet-text">{bulletText}</span>
           </div>
@@ -430,12 +318,12 @@ export default function NotesView({
 
       // Empty blank line
       if (!trimmed) {
-        return <div key={idx} className="notion-block-spacer" />;
+        return <div key={idx} className="apple-block-spacer" />;
       }
 
       // Normal paragraph
       return (
-        <p key={idx} className="notion-block-p">
+        <p key={idx} className="apple-block-p">
           {line}
         </p>
       );
@@ -443,34 +331,34 @@ export default function NotesView({
   };
 
   // =========================================================================
-  // VIEW 1: NOTE EDITOR / DETAIL PAGE
+  // VIEW 1: NOTE EDITOR / DETAIL PAGE (Simple, Clean Apple Design)
   // =========================================================================
   if (viewMode === 'editor') {
     return (
-      <div className="notion-editor-container fade-in">
-        {/* Top Sticky Header */}
-        <div className="notion-editor-topbar">
+      <div className="apple-editor-container fade-in">
+        {/* Top Header Bar */}
+        <div className="apple-editor-topbar">
           <div className="editor-left-actions">
             <button 
-              className="notion-back-btn" 
+              className="apple-back-btn" 
               onClick={() => setViewMode('list')}
-              title="Return to Notes List"
+              title="Return to Notes"
             >
               <span>← Notes</span>
             </button>
             <span className={`save-pill ${saveStatus}`}>
-              {saveStatus === 'saving' ? 'Saving...' : 'Saved ✓'}
+              {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
             </span>
           </div>
 
           <div className="editor-right-actions">
             <button 
-              className={`editor-icon-btn ${editorPinned ? 'pinned-active' : ''}`}
+              className={`apple-icon-btn ${editorPinned ? 'pinned-active' : ''}`}
               onClick={() => {
                 const nextPinned = !editorPinned;
                 setEditorPinned(nextPinned);
                 triggerSave({ pinned: nextPinned });
-                showToast(nextPinned ? '📌 Pinned to top' : 'Unpinned note');
+                showToast(nextPinned ? '📌 Pinned to top' : 'Unpinned');
               }}
               title={editorPinned ? 'Unpin note' : 'Pin note to top'}
             >
@@ -478,23 +366,23 @@ export default function NotesView({
             </button>
 
             <button 
-              className={`editor-icon-btn ${isInteractivePreview ? 'preview-active' : ''}`}
+              className={`apple-icon-btn ${isInteractivePreview ? 'preview-active' : ''}`}
               onClick={() => setIsInteractivePreview(prev => !prev)}
-              title="Toggle interactive checklist preview mode"
+              title="Toggle checklist preview"
             >
-              <span>{isInteractivePreview ? '✏️ Edit Text' : '👁️ Interactive'}</span>
+              <span>{isInteractivePreview ? '✏️ Edit' : '👁️ View'}</span>
             </button>
 
             <button 
-              className="editor-icon-btn"
+              className="apple-icon-btn"
               onClick={() => handleCopyNoteText({ title: editorTitle, content: editorContent })}
-              title="Copy note text"
+              title="Copy note"
             >
               <span>📋</span>
             </button>
 
             <button 
-              className="editor-icon-btn delete-btn"
+              className="apple-icon-btn delete-btn"
               onClick={handleDeleteCurrentNote}
               title="Delete note"
             >
@@ -503,25 +391,22 @@ export default function NotesView({
           </div>
         </div>
 
-        {/* Notion Page Body */}
-        <div className="notion-page-card">
-          {/* Top Gradient Accent Strip */}
-          <div className="notion-page-accent-strip" />
-
+        {/* Note Body Card */}
+        <div className="apple-page-card">
           {/* Icon & Title Row */}
-          <div className="notion-page-header">
-            <div className="notion-icon-picker-wrap" ref={emojiPickerRef}>
+          <div className="apple-page-header">
+            <div className="apple-icon-picker-wrap" ref={emojiPickerRef}>
               <button 
                 type="button"
-                className="notion-icon-display-btn"
+                className="apple-icon-display-btn"
                 onClick={() => setShowEmojiPicker(prev => !prev)}
-                title="Change Note Emoji Icon"
+                title="Change Emoji Icon"
               >
                 <span>{editorIcon}</span>
               </button>
 
               {showEmojiPicker && (
-                <div className="notion-emoji-palette fade-in">
+                <div className="apple-emoji-palette fade-in">
                   <div className="emoji-palette-grid">
                     {EMOJI_PALETTE.map(emoji => (
                       <button 
@@ -542,11 +427,11 @@ export default function NotesView({
               )}
             </div>
 
-            <div className="notion-title-wrap">
+            <div className="apple-title-wrap">
               <input 
                 type="text"
-                className="notion-title-input"
-                placeholder="Untitled Note..."
+                className="apple-title-input"
+                placeholder="Title..."
                 value={editorTitle}
                 onChange={(e) => {
                   setEditorTitle(e.target.value);
@@ -557,13 +442,12 @@ export default function NotesView({
           </div>
 
           {/* Category Tag Selector */}
-          <div className="notion-tag-chips-row">
-            <span className="notion-tag-label">Category:</span>
+          <div className="apple-tag-chips-row">
             {NOTE_TAGS.map(t => (
               <button 
                 key={t}
                 type="button"
-                className={`notion-tag-chip ${editorTag === t ? 'active' : ''} tag-${t.toLowerCase()}`}
+                className={`apple-tag-chip ${editorTag === t ? 'active' : ''}`}
                 onClick={() => {
                   setEditorTag(t);
                   triggerSave({ tag: t });
@@ -574,52 +458,44 @@ export default function NotesView({
             ))}
           </div>
 
-          {/* Quick Notion Block Inserters Toolbar (in Edit Mode) */}
+          {/* Quick Block Inserters (When Editing) */}
           {!isInteractivePreview && (
-            <div className="notion-quick-blocks-bar">
-              <span className="quick-blocks-hint">Insert block:</span>
+            <div className="apple-quick-blocks-bar">
               <button 
                 type="button" 
                 className="quick-block-btn"
-                onClick={() => handleInsertBlock('[ ] ', 'New study checklist item')}
+                onClick={() => handleInsertBlock('[ ] ', 'Checklist item')}
               >
                 ☑️ Checkbox
               </button>
               <button 
                 type="button" 
                 className="quick-block-btn"
-                onClick={() => handleInsertBlock('• ', 'High-band collocation or rule')}
+                onClick={() => handleInsertBlock('• ', 'Rule / Collocation')}
               >
                 • Bullet
               </button>
               <button 
                 type="button" 
                 className="quick-block-btn"
-                onClick={() => handleInsertBlock('> 💡 Tip: ', 'Important IELTS memory tip')}
+                onClick={() => handleInsertBlock('> 💡 Tip: ', 'Study tip')}
               >
-                💡 Tip Box
-              </button>
-              <button 
-                type="button" 
-                className="quick-block-btn"
-                onClick={() => handleInsertBlock('### ', 'Section Header')}
-              >
-                H Header
+                💡 Tip
               </button>
             </div>
           )}
 
-          {/* Content Area: Editor Textarea or Interactive Checklist Reader */}
-          <div className="notion-page-content-area">
+          {/* Content Area */}
+          <div className="apple-page-content-area">
             {isInteractivePreview ? (
-              <div className="notion-interactive-reader fade-in">
+              <div className="apple-interactive-reader fade-in">
                 {renderFormattedLines(editorContent, activeNoteId)}
               </div>
             ) : (
               <textarea 
                 ref={textareaRef}
-                className="notion-page-textarea"
-                placeholder="Type your study notes, essay collocations, or spelling checklists here...&#10;&#10;💡 Quick Tips:&#10;• Type '[ ] ' to make an interactive checkbox&#10;• Type '• ' or '- ' for bullet points&#10;• Type '> 💡 ' for a highlight tip box&#10;• Type '### ' for section headers"
+                className="apple-page-textarea"
+                placeholder="Type your notes here...&#10;&#10;Use [ ] for checklists&#10;Use • for bullet points&#10;Use > for tips"
                 value={editorContent}
                 onChange={(e) => {
                   setEditorContent(e.target.value);
@@ -634,83 +510,25 @@ export default function NotesView({
   }
 
   // =========================================================================
-  // VIEW 2: NOTES LIST & GALLERY (Default Notion Workspace)
+  // VIEW 2: NOTES LIST (Clean, Simple, Apple-Style Layout)
   // =========================================================================
   return (
-    <div className="notion-notes-view-container fade-in">
-      {/* Top Workspace Header */}
-      <div className="notion-workspace-header">
-        <div className="workspace-header-text">
-          <div className="notion-badge-row">
-            <span className="notion-app-icon">📓</span>
-            <span className="notion-app-title">Study Notes & Notion Desk</span>
-            <span className="notion-count-pill">{notes.length} {notes.length === 1 ? 'note' : 'notes'}</span>
-          </div>
-          <p className="notion-workspace-subtitle">
-            Personal vocabulary notebook, IELTS collocations, essay idea bank, and spelling checklists.
-          </p>
-        </div>
-
-        <div className="workspace-header-actions">
-          {/* Template Menu Dropdown */}
-          <div className="notion-template-wrap" ref={templateMenuRef}>
-            <button 
-              type="button"
-              className="notion-template-trigger-btn"
-              onClick={() => setShowTemplateMenu(prev => !prev)}
-            >
-              <span>⚡ Templates ▾</span>
-            </button>
-
-            {showTemplateMenu && (
-              <div className="notion-templates-menu fade-in">
-                <div className="template-menu-header">
-                  <strong>Study Templates</strong>
-                  <span>1-click structured study notes</span>
-                </div>
-                {TEMPLATES.map((tpl, i) => (
-                  <button 
-                    key={i}
-                    type="button"
-                    className="template-menu-item"
-                    onClick={() => handleApplyTemplate(tpl)}
-                  >
-                    <span className="tpl-item-icon">{tpl.icon}</span>
-                    <div className="tpl-item-info">
-                      <strong className="tpl-item-name">{tpl.name}</strong>
-                      <span className="tpl-item-desc">{tpl.desc}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* New Note Button */}
-          <button 
-            type="button"
-            className="notion-new-note-btn"
-            onClick={handleCreateBlankNote}
-          >
-            <span>＋ New Note</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Search & Filter Controls Bar */}
-      <div className="notion-controls-bar">
-        <div className="notion-search-shell">
+    <div className="apple-notes-view-container fade-in">
+      {/* Sleek Top Bar: Search Input on left + '+ New Note' on right */}
+      <div className="apple-notes-controls-bar">
+        <div className="apple-search-shell">
           <span className="search-icon">🔍</span>
           <input 
             type="text"
-            className="notion-search-input"
-            placeholder="Search notes by title, tag, or content..."
+            className="apple-search-input"
+            placeholder="Search notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
             <button 
-              className="notion-search-clear-btn" 
+              type="button"
+              className="apple-search-clear-btn" 
               onClick={() => setSearchQuery('')}
               aria-label="Clear search"
             >
@@ -719,50 +537,61 @@ export default function NotesView({
           )}
         </div>
 
-        <div className="notion-filter-chips-row">
+        <button 
+          type="button"
+          className="apple-new-note-btn"
+          onClick={handleCreateBlankNote}
+        >
+          <span>＋ New Note</span>
+        </button>
+      </div>
+
+      {/* Filter Chips Row */}
+      <div className="apple-filter-chips-row">
+        <button 
+          type="button"
+          className={`apple-filter-chip ${filterTag === 'ALL' ? 'active' : ''}`}
+          onClick={() => setFilterTag('ALL')}
+        >
+          All ({notes.length})
+        </button>
+        {notes.some(n => n.pinned) && (
           <button 
             type="button"
-            className={`notion-filter-chip ${filterTag === 'ALL' ? 'active' : ''}`}
-            onClick={() => setFilterTag('ALL')}
-          >
-            All ({notes.length})
-          </button>
-          <button 
-            type="button"
-            className={`notion-filter-chip ${filterTag === 'PINNED' ? 'active' : ''}`}
+            className={`apple-filter-chip ${filterTag === 'PINNED' ? 'active' : ''}`}
             onClick={() => setFilterTag('PINNED')}
           >
             📌 Pinned ({notes.filter(n => n.pinned).length})
           </button>
-          {NOTE_TAGS.map(t => {
-            const count = notes.filter(n => n.tag === t).length;
-            if (count === 0 && filterTag !== t) return null;
-            return (
-              <button 
-                key={t}
-                type="button"
-                className={`notion-filter-chip ${filterTag === t ? 'active' : ''}`}
-                onClick={() => setFilterTag(t)}
-              >
-                {t} ({count})
-              </button>
-            );
-          })}
-        </div>
+        )}
+        {NOTE_TAGS.map(t => {
+          const count = notes.filter(n => n.tag === t).length;
+          if (count === 0 && filterTag !== t) return null;
+          return (
+            <button 
+              key={t}
+              type="button"
+              className={`apple-filter-chip ${filterTag === t ? 'active' : ''}`}
+              onClick={() => setFilterTag(t)}
+            >
+              {t} ({count})
+            </button>
+          );
+        })}
       </div>
 
-      {/* Notes Grid */}
+      {/* Notes Grid / List */}
       {filteredNotes.length > 0 ? (
-        <div className="notion-notes-grid">
+        <div className="apple-notes-grid">
           {filteredNotes.map(note => {
             const checkStats = getNoteChecklistStats(note.content);
             return (
               <div 
                 key={note.id} 
-                className={`notion-note-card ${note.pinned ? 'card-pinned' : ''}`}
+                className={`apple-note-card ${note.pinned ? 'card-pinned' : ''}`}
                 onClick={() => handleOpenNote(note)}
               >
-                {/* Pinned Accent Header */}
+                {/* Top Row: Icon + Title + Pin */}
                 <div className="note-card-top-row">
                   <div className="note-card-icon-title">
                     <span className="note-card-emoji">{note.icon || '📝'}</span>
@@ -775,9 +604,9 @@ export default function NotesView({
                     onClick={(e) => {
                       e.stopPropagation();
                       onPinNote(note.id);
-                      showToast(note.pinned ? 'Unpinned note' : '📌 Pinned to top');
+                      showToast(note.pinned ? 'Unpinned' : '📌 Pinned');
                     }}
-                    title={note.pinned ? 'Unpin note' : 'Pin to top'}
+                    title={note.pinned ? 'Unpin note' : 'Pin note to top'}
                   >
                     📌
                   </button>
@@ -785,12 +614,12 @@ export default function NotesView({
 
                 {/* Tag Badge & Checklist Progress */}
                 <div className="note-card-meta-row">
-                  <span className={`notion-card-tag tag-${(note.tag || 'general').toLowerCase()}`}>
+                  <span className={`apple-card-tag tag-${(note.tag || 'general').toLowerCase()}`}>
                     {note.tag || 'General'}
                   </span>
 
                   {checkStats.hasChecklist && (
-                    <span className="notion-checklist-badge">
+                    <span className="apple-checklist-badge">
                       ✓ {checkStats.completed}/{checkStats.total}
                     </span>
                   )}
@@ -821,7 +650,7 @@ export default function NotesView({
                         e.stopPropagation();
                         handleCopyNoteText(note);
                       }}
-                      title="Copy note text"
+                      title="Copy note"
                     >
                       📋
                     </button>
@@ -830,7 +659,7 @@ export default function NotesView({
                       className="card-quick-action-btn delete"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm(`Delete note "${note.title || 'Untitled'}"?`)) {
+                        if (window.confirm(`Delete "${note.title || 'Untitled'}"?`)) {
                           onDeleteNote(note.id);
                         }
                       }}
@@ -845,43 +674,34 @@ export default function NotesView({
           })}
         </div>
       ) : (
-        <div className="notion-empty-workspace-card">
-          <div className="empty-workspace-icon">📓</div>
-          <h3 className="empty-workspace-title">
-            {searchQuery ? `No notes found matching "${searchQuery}"` : 'Your Personal Note Desk is Clean'}
+        <div className="apple-empty-notes-card">
+          <span className="empty-apple-icon">📝</span>
+          <h3 className="empty-apple-title">
+            {searchQuery ? `No notes matching "${searchQuery}"` : 'No Notes Yet'}
           </h3>
-          <p className="empty-workspace-subtitle">
+          <p className="empty-apple-subtitle">
             {searchQuery 
-              ? 'Try searching for other words or clear the search filter.' 
-              : 'Keep track of IELTS vocabulary, essay collocations, and spelling rules in a mini Notion format.'}
+              ? 'Try another search term.' 
+              : 'Tap "＋ New Note" to jot down your vocabulary rules, collocations, or ideas.'}
           </p>
 
-          <div className="empty-workspace-actions">
+          <div className="empty-apple-actions">
             {searchQuery ? (
               <button 
                 type="button"
-                className="cta-navy-button"
+                className="apple-search-clear-action-btn"
                 onClick={() => setSearchQuery('')}
               >
                 Clear Search
               </button>
             ) : (
-              <>
-                <button 
-                  type="button"
-                  className="cta-red-button"
-                  onClick={handleCreateBlankNote}
-                >
-                  <span>＋ Create First Note</span>
-                </button>
-                <button 
-                  type="button"
-                  className="ghost-pill-btn"
-                  onClick={() => handleApplyTemplate(TEMPLATES[0])}
-                >
-                  ⚡ Insert IELTS Collocations Template
-                </button>
-              </>
+              <button 
+                type="button"
+                className="apple-new-note-btn btn-large"
+                onClick={handleCreateBlankNote}
+              >
+                <span>＋ Create Note</span>
+              </button>
             )}
           </div>
         </div>
