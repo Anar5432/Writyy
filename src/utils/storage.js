@@ -87,12 +87,17 @@ export const getStoredData = () => {
       ? rawStats.xpBalance
       : (correctSpelling - wrongSpelling);
 
+    const notes = Array.isArray(parsed.notes) && parsed.notes.length > 0 
+      ? parsed.notes 
+      : getInitialSampleNotes();
+
     const merged = {
       allWords: words,
       stack1_mastered: (parsed.stack1_mastered || []).map(enrichWordWithAwl),
       stack2_spelling: (parsed.stack2_spelling || []).map(enrichWordWithAwl),
       stack3_meaning: (parsed.stack3_meaning || []).map(enrichWordWithAwl),
       struggledHistory: initialStruggled,
+      notes,
       history: parsed.history || [],
       stats: {
         totalTested,
@@ -118,6 +123,82 @@ export const saveStoredData = (data) => {
   }
 };
 
+export const getInitialSampleNotes = () => [
+  {
+    id: 'note_ielts_collocations_sample',
+    title: 'IELTS Academic Writing Task 2 - High-Band Collocations',
+    icon: '💡',
+    tag: 'IELTS',
+    pinned: true,
+    content: `### High-Band Academic Collocations for Essays
+
+• **play a pivotal role in**
+  e.g. *Education plays a pivotal role in fostering economic equality.*
+
+• **exert a profound influence on**
+  e.g. *Modern digital media exerts a profound influence on teenage psychology.*
+
+• **pose a severe threat to**
+  e.g. *Industrial runoff poses a severe threat to coastal biodiversity.*
+
+• **reap substantial benefits from**
+  e.g. *Communities reap substantial benefits from public transit investments.*
+
+• **bridge the socioeconomic divide**
+  e.g. *Targeted scholarships bridge the socioeconomic divide between rural and urban youth.*
+
+• **strike a delicate balance between**
+  e.g. *Governments must strike a delicate balance between industrial growth and environmental conservation.*`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'note_spelling_rules_sample',
+    title: 'Tricky Spelling Checklist & Silent Letters',
+    icon: '⚡',
+    tag: 'Spelling',
+    pinned: false,
+    content: `### High-Frequency IELTS Misspellings Checklist
+
+[x] accommodate (double 'c', double 'm')
+[x] privilege (no 'd', ends in -ege)
+[ ] conscientious (c-i-e-n)
+[ ] embarrassment (double 'r', double 's')
+[ ] pronunciation (pro-NUN-ciation, not pronounce)
+[ ] hierarchy (i before e)
+[ ] definitely (finite inside definitely: d-e-f-i-n-i-t-e-l-y)
+
+> 💡 Rule of Thumb: When a suffix begins with a vowel, drop the silent final 'e' (argue → arguing, achieve → achievable).`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'note_awl_focus_sample',
+    title: 'AWL Sublist 1 - Word Family Matrix',
+    icon: '🎯',
+    tag: 'Vocabulary',
+    pinned: false,
+    content: `### Core Academic Word Roots
+
+• **analyze** (Verb)
+  - Noun: *analysis*, *analyst*
+  - Adjective: *analytical*
+  - Adverb: *analytically*
+  - Collocation: *conduct a thorough analysis*
+
+• **approach** (Noun / Verb)
+  - Adjective: *approachable*
+  - Collocation: *adopt an innovative approach to solving problems*
+
+• **concept** (Noun)
+  - Verb: *conceptualize*
+  - Adjective: *conceptual*
+  - Collocation: *abstract concept*, *grasp the core concept*`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
 export const initializeDefaultData = () => {
   const initial = {
     allWords: ensureAwlEnriched(INITIAL_WORDS),
@@ -125,6 +206,7 @@ export const initializeDefaultData = () => {
     stack2_spelling: [],
     stack3_meaning: [],
     struggledHistory: [],
+    notes: getInitialSampleNotes(),
     history: [],
     stats: { 
       totalTested: 0, 
@@ -145,6 +227,7 @@ export const resetAllProgress = () => {
     stack2_spelling: [],
     stack3_meaning: [],
     struggledHistory: [],
+    notes: current.notes || getInitialSampleNotes(),
     history: [],
     stats: { 
       totalTested: 0, 

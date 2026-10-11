@@ -13,12 +13,13 @@ import {
   scheduleCloudSync 
 } from './utils/cloudSync';
 import AuthModal from './components/AuthModal';
+import NotesView from './components/NotesView';
 import './App.css';
 
 export default function App() {
   // Global State
   const [data, setData] = useState(() => getStoredData());
-  const [activeTab, setActiveTab] = useState('study'); // 'study' | 'review' | 'search' | 'stats' | 'add'
+  const [activeTab, setActiveTab] = useState('study'); // 'study' | 'review' | 'notes' | 'search' | 'stats' | 'add'
   const [selectedLevel, setSelectedLevel] = useState('IELTS_FOCUS'); // 'ALL', 'A1'..'C1', 'IELTS_FOCUS', 'AWL'
   const [selectedAwlSublist, setSelectedAwlSublist] = useState(1); // 1..10 or 'ALL'
   const [audioSpeed, setAudioSpeed] = useState(1.05);
@@ -1139,6 +1140,57 @@ export default function App() {
     }
   };
 
+  // Notes / Notion Notetaker Handlers
+  const handleSaveNote = (updatedNote) => {
+    setData(prev => {
+      const existingIndex = (prev.notes || []).findIndex(n => n.id === updatedNote.id);
+      let newNotes;
+      if (existingIndex >= 0) {
+        newNotes = [...(prev.notes || [])];
+        newNotes[existingIndex] = { ...updatedNote, updatedAt: new Date().toISOString() };
+      } else {
+        newNotes = [
+          { 
+            ...updatedNote, 
+            id: updatedNote.id || `note_${Date.now()}`, 
+            createdAt: updatedNote.createdAt || new Date().toISOString(), 
+            updatedAt: new Date().toISOString() 
+          },
+          ...(prev.notes || [])
+        ];
+      }
+      const updatedData = { ...prev, notes: newNotes };
+      saveStoredData(updatedData);
+      scheduleCloudSync(currentUser, updatedData);
+      return updatedData;
+    });
+  };
+
+  const handleDeleteNote = (noteId) => {
+    setData(prev => {
+      const newNotes = (prev.notes || []).filter(n => n.id !== noteId);
+      const updatedData = { ...prev, notes: newNotes };
+      saveStoredData(updatedData);
+      scheduleCloudSync(currentUser, updatedData);
+      return updatedData;
+    });
+  };
+
+  const handlePinNote = (noteId) => {
+    setData(prev => {
+      const newNotes = (prev.notes || []).map(n => {
+        if (n.id === noteId) {
+          return { ...n, pinned: !n.pinned, updatedAt: new Date().toISOString() };
+        }
+        return n;
+      });
+      const updatedData = { ...prev, notes: newNotes };
+      saveStoredData(updatedData);
+      scheduleCloudSync(currentUser, updatedData);
+      return updatedData;
+    });
+  };
+
   // Metrics & Strict Daily XP
   const todayKey = getTodayKey();
   const todayStats = (data.stats && data.stats.daily && data.stats.daily[todayKey]) || {
@@ -1238,6 +1290,16 @@ export default function App() {
           </div>
 
           <div className="topbar-right">
+            {/* Search Icon Button (Relocated to topbar header as requested) */}
+            <button 
+              className={`header-menu-btn header-search-btn ${activeTab === 'search' ? 'active' : ''}`}
+              onClick={() => setActiveTab(prev => prev === 'search' ? 'study' : 'search')}
+              title={activeTab === 'search' ? 'Back to Dictation' : 'Search Dictionary & AWL'}
+              aria-label="Search Dictionary"
+            >
+              <span>🔍</span>
+            </button>
+
             {/* Dropdown Menu Button */}
             <div className="dropdown-menu-wrapper" ref={menuDropdownRef}>
               <button 
@@ -1301,7 +1363,7 @@ export default function App() {
         </header>
 
 
-        {/* Global Navigation Tabs (Core 3 Tabs) */}
+        {/* Global Navigation Tabs (Core 3 Tabs: Dictation, Review, Notes) */}
         <nav className="pill-nav-bar">
           <button 
             className={`pill-nav-btn ${activeTab === 'study' ? 'active' : ''}`}
@@ -1321,10 +1383,15 @@ export default function App() {
             )}
           </button>
           <button 
-            className={`pill-nav-btn ${activeTab === 'search' ? 'active' : ''}`}
-            onClick={() => setActiveTab('search')}
+            className={`pill-nav-btn ${activeTab === 'notes' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notes')}
           >
-            🔍 Search
+            📝 Notes
+            {(data.notes || []).length > 0 && (
+              <span className="nav-count-badge notes-badge">
+                {(data.notes || []).length}
+              </span>
+            )}
           </button>
         </nav>
 
@@ -1728,7 +1795,17 @@ export default function App() {
           <div className="view-content fade-in">
             <div className="search-view-container">
               <div className="search-header-box">
-                <span className="search-tagline">Offline Lexicon ({data.allWords.length} words loaded)</span>
+                <div className="search-top-header-row">
+                  <span className="search-tagline">Offline Lexicon ({data.allWords.length} words loaded)</span>
+                  <button 
+                    type="button"
+                    className="search-close-pill-btn"
+                    onClick={() => setActiveTab('study')}
+                    title="Return to Dictation"
+                  >
+                    ← Back to Dictation
+                  </button>
+                </div>
                 <h2 className="search-title">Search & Add Words</h2>
                 
                 {/* Instant Search Bar */}
@@ -1832,6 +1909,22 @@ export default function App() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* VIEW: NOTION STUDY NOTES & NOTE TAKER */}
+        {/* ============================================================ */}
+        {activeTab === 'notes' && (
+          <div className="view-content fade-in">
+            <NotesView 
+              notes={data.notes || []}
+              onSaveNote={handleSaveNote}
+              onDeleteNote={handleDeleteNote}
+              onPinNote={handlePinNote}
+              showToast={showToast}
+              currentUser={currentUser}
+            />
           </div>
         )}
 

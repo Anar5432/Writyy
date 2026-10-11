@@ -14,6 +14,7 @@ export function extractSyncPayload(data) {
     stack2_spelling: data.stack2_spelling || [],
     stack3_meaning: data.stack3_meaning || [],
     struggledHistory: data.struggledHistory || [],
+    notes: data.notes || [],
     customWords,
     history: (data.history || []).slice(-100),
     stats: data.stats || { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
@@ -151,12 +152,31 @@ export function mergeCloudAndLocal(localData, cloudData) {
     : (cloudCorrect - (cloudTested - cloudCorrect));
   const finalXp = finalTotalTested === localTested ? localXp : cloudXp;
 
+  // Merge notes by unique id with most recent updatedAt taking precedence
+  const notesMap = new Map();
+  const allNotes = [...(cloudData.notes || []), ...(localData.notes || [])];
+  for (const n of allNotes) {
+    if (!n || !n.id) continue;
+    if (!notesMap.has(n.id)) {
+      notesMap.set(n.id, n);
+    } else {
+      const existing = notesMap.get(n.id);
+      const existingTime = new Date(existing.updatedAt || 0).getTime();
+      const nTime = new Date(n.updatedAt || 0).getTime();
+      if (nTime >= existingTime) {
+        notesMap.set(n.id, n);
+      }
+    }
+  }
+  const mergedNotes = notesMap.size > 0 ? Array.from(notesMap.values()) : (localData.notes || []);
+
   return {
     allWords: ensureAwlEnriched([...mergedCustom, ...INITIAL_WORDS]),
     stack1_mastered: mergedMastered.map(enrichWordWithAwl),
     stack2_spelling: mergedSpelling.map(enrichWordWithAwl),
     stack3_meaning: mergedMeaning.map(enrichWordWithAwl),
     struggledHistory: Array.from(struggledMap.values()),
+    notes: mergedNotes,
     history: (cloudData.history && cloudData.history.length > 0) ? cloudData.history : (localData.history || []),
     stats: {
       totalTested: finalTotalTested,
