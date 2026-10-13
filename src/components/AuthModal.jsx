@@ -154,9 +154,13 @@ export default function AuthModal({
 
   const handleLogout = () => {
     logoutUser();
+    try {
+      localStorage.removeItem('writyy_neon_session');
+      localStorage.removeItem('writyy_guest_session');
+    } catch (e) {}
     if (onUserAuthChange) onUserAuthChange(null, null);
-    setSuccessMsg('Logged out.');
-    setTimeout(() => onClose(), 600);
+    setSuccessMsg('✓ Logged out successfully.');
+    setTimeout(() => onClose(), 400);
   };
 
   const handleStartEditName = () => {

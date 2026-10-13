@@ -96,13 +96,44 @@ export default function App() {
   const abortControllerRef = useRef(null);
 
   // Neon Auth & Cloud Sync State
-  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  // Ensure that all existing and new devices start signed out on this release
+  // so visitors and friends clicking the link start on the clean Sign Up / Create Account screen
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceLogout = urlParams.has('logout') || urlParams.get('auth') === 'signup' || urlParams.get('auth') === 'login';
+        const hasReset = localStorage.getItem('writyy_auth_v29_reset');
+        if (!hasReset || forceLogout) {
+          logoutUser();
+          localStorage.removeItem('writyy_guest_session');
+          localStorage.setItem('writyy_auth_v29_reset', 'true');
+          if (urlParams.has('logout')) {
+            urlParams.delete('logout');
+            const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+            window.history.replaceState({}, '', newUrl);
+          }
+          return null;
+        }
+      }
+    } catch (e) {}
+    return getCurrentUser();
+  });
+
   const [isGuestMode, setIsGuestMode] = useState(() => {
     try {
-      return Boolean(localStorage.getItem('writyy_guest_session'));
-    } catch (e) {
-      return false;
-    }
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('logout') || urlParams.get('auth') === 'signup' || urlParams.get('auth') === 'login') {
+          return false;
+        }
+        if (!localStorage.getItem('writyy_auth_v29_reset')) {
+          return false;
+        }
+        return Boolean(localStorage.getItem('writyy_guest_session'));
+      }
+    } catch (e) {}
+    return false;
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -1573,6 +1604,49 @@ export default function App() {
                       <span>{currentUser ? '🟢 Synced with cloud · View stats' : 'Profile, cloud sync & XP stats'}</span>
                     </div>
                   </button>
+
+                  {currentUser ? (
+                    <button 
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        setShowMenuDropdown(false);
+                        logoutUser();
+                        try {
+                          localStorage.removeItem('writyy_guest_session');
+                          localStorage.removeItem('writyy_neon_session');
+                        } catch (e) {}
+                        setCurrentUser(null);
+                        setIsGuestMode(false);
+                        setData(getStoredData(null));
+                        showToast('✓ Signed out. Enter with any account.');
+                      }}
+                    >
+                      <span className="dropdown-icon">🚪</span>
+                      <div className="dropdown-item-text">
+                        <strong style={{ color: '#ef4444' }}>Sign Out</strong>
+                        <span>Exit account & switch user</span>
+                      </div>
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        setShowMenuDropdown(false);
+                        setIsGuestMode(false);
+                        try {
+                          localStorage.removeItem('writyy_guest_session');
+                        } catch (e) {}
+                      }}
+                    >
+                      <span className="dropdown-icon">✨</span>
+                      <div className="dropdown-item-text">
+                        <strong style={{ color: 'var(--royal-blue)' }}>Create Account / Sign In</strong>
+                        <span>Save your progress to the cloud</span>
+                      </div>
+                    </button>
+                  )}
 
                   <div className="dropdown-divider"></div>
 

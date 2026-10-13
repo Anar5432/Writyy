@@ -1,5 +1,5 @@
 // Service Worker for 100% Offline PWA, Studio Audio & Over-the-Air Auto-Updates
-const CACHE_NAME = 'writyy-v29-review-hierarchy-scroll-persist';
+const CACHE_NAME = 'writyy-v30-auth-clean-reset';
 const AUDIO_CACHE = 'writyy-audio-v1';
 
 const CORE_ASSETS = [
