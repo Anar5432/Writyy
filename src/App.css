@@ -2699,8 +2699,49 @@ html, body {
   box-shadow: var(--shadow-sm);
 }
 
-/* AWL Sublist Pills in Review & Stats */
+/* Review Category Toggle Bar (AWL vs IELTS & CEFR) */
+.review-category-toggle-bar {
+  display: flex;
+  gap: 8px;
+  background: #f8fafc;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 12px;
+  border: 1.5px solid var(--border-light);
+}
+
+.review-cat-btn {
+  flex: 1;
+  padding: 8px 14px;
+  font-size: 0.80rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.review-cat-btn:hover {
+  color: var(--text-dark);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.review-cat-btn.active {
+  background: var(--oxford-blue);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(16, 55, 120, 0.22);
+}
+
+/* AWL & CEFR Sublist Pills in Review & Stats */
 .review-awl-pills-row,
+.review-cefr-pills-row,
 .stats-awl-pills-row {
   display: flex;
   gap: 6px;
@@ -2757,6 +2798,25 @@ html, body {
 .stats-sub-pill.active .stats-sub-badge {
   background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
+}
+
+/* IELTS Focus Tier Pill Accent */
+.review-sub-pill.ielts-tier-pill {
+  border-color: #fde68a;
+  background: #fffdf5;
+  color: #92400e;
+}
+
+.review-sub-pill.ielts-tier-pill:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.review-sub-pill.ielts-tier-pill.active {
+  background: #b45309;
+  border-color: #b45309;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.28);
 }
 
 /* Review Empty State Buttons */

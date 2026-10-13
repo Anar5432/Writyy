@@ -17,6 +17,16 @@ import NotesView from './components/NotesView';
 import AuthLandingView from './components/AuthLandingView';
 import './App.css';
 
+export const REVIEW_CEFR_TIERS = [
+  { key: 'ALL', label: 'All (A1–C1)' },
+  { key: 'IELTS_FOCUS', label: '★ IELTS (B2/C1)' },
+  { key: 'A1', label: 'A1' },
+  { key: 'A2', label: 'A2' },
+  { key: 'B1', label: 'B1' },
+  { key: 'B2', label: 'B2' },
+  { key: 'C1', label: 'C1' },
+];
+
 export default function App() {
   // Global State
   const [data, setData] = useState(() => getStoredData());
@@ -36,6 +46,8 @@ export default function App() {
   const [lastResult, setLastResult] = useState(null); // { isCorrectSpelling, wordObj, routedToStack }
 
   // Review Mode State
+  const [reviewCategory, setReviewCategory] = useState('AWL'); // 'AWL' | 'CEFR'
+  const [reviewCefrLevel, setReviewCefrLevel] = useState('IELTS_FOCUS'); // 'ALL' | 'IELTS_FOCUS' | 'A1'..'C1'
   const [reviewStackType, setReviewStackType] = useState('stack2'); // 'stack2' | 'stack3'
   const [reviewSublist, setReviewSublist] = useState(1); // 1..10 | 'ALL' | 'OTHER'
   const [reviewTabMode, setReviewTabMode] = useState('template'); // 'template' | 'active'
@@ -47,6 +59,11 @@ export default function App() {
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewResult, setReviewResult] = useState(null);
   const [reviewErrorFeedback, setReviewErrorFeedback] = useState(null);
+
+  // Position & Progress Retention Refs (Preserve exact state across navigation)
+  const scrollPositionsRef = useRef({ study: 0, review: 0, notes: 0, search: 0 });
+  const studyProgressRef = useRef({});
+  const reviewProgressRef = useRef({});
 
 
   // Search Mode State
@@ -352,6 +369,64 @@ export default function App() {
     setTimeout(() => setToastMsg(''), 3000);
   };
 
+  // Handle tab switches with scroll preservation
+  const handleTabSwitch = (nextTabOrUpdater) => {
+    const nextTab = typeof nextTabOrUpdater === 'function' ? nextTabOrUpdater(activeTab) : nextTabOrUpdater;
+    if (nextTab === activeTab) return;
+    scrollPositionsRef.current[activeTab] = window.scrollY || document.documentElement.scrollTop || 0;
+    setActiveTab(nextTab);
+  };
+
+  // Continuous scroll listener to track scroll position of active view
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeTab) {
+        scrollPositionsRef.current[activeTab] = window.scrollY || document.documentElement.scrollTop || 0;
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeTab]);
+
+  // Restore scroll position when activeTab switches
+  useEffect(() => {
+    const targetY = scrollPositionsRef.current[activeTab] || 0;
+    const rafId = requestAnimationFrame(() => {
+      window.scrollTo({
+        top: targetY,
+        left: 0,
+        behavior: 'instant'
+      });
+    });
+    const timer = setTimeout(() => {
+      window.scrollTo({
+        top: targetY,
+        left: 0,
+        behavior: 'instant'
+      });
+    }, 30);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timer);
+    };
+  }, [activeTab]);
+
+  // Keys for tracking position across sublists and CEFR levels
+  const getStudyKey = (lvl, awlSub) => lvl === 'AWL' ? `AWL_${awlSub}` : lvl;
+  const getReviewKey = (cat, sub, lvl) => cat === 'AWL' ? `AWL_${sub}` : `CEFR_${lvl}`;
+
+  // Track current word index in study progress ref
+  useEffect(() => {
+    const key = getStudyKey(selectedLevel, selectedAwlSublist);
+    studyProgressRef.current[key] = currentIndex;
+  }, [currentIndex, selectedLevel, selectedAwlSublist]);
+
+  // Track review word index in review progress ref
+  useEffect(() => {
+    const key = getReviewKey(reviewCategory, reviewSublist, reviewCefrLevel);
+    reviewProgressRef.current[key] = reviewIndex;
+  }, [reviewIndex, reviewCategory, reviewSublist, reviewCefrLevel]);
+
   // Initialize Study Queue whenever selectedLevel, selectedAwlSublist, or data.allWords.length changes
   useEffect(() => {
     let pool = [];
@@ -386,39 +461,93 @@ export default function App() {
     });
 
     // The user wants ALL words of this sublist in the study queue so they can progress from 1 to N (e.g. 1 to 60)
-    // DO NOT filter out mastered words mid-session! The denominator MUST remain the total count of words in this sublist.
     setQueue(filtered);
-    setCurrentIndex(0);
+
+    // Restore saved index for this specific level / sublist if it exists
+    const key = getStudyKey(selectedLevel, selectedAwlSublist);
+    const savedIdx = studyProgressRef.current[key];
+    const targetIdx = (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < filtered.length)
+      ? savedIdx
+      : 0;
+    setCurrentIndex(targetIdx);
     resetStudyInputs();
   }, [selectedLevel, selectedAwlSublist, data.allWords.length]);
 
-  // Helper to compute filtered review queue from any state
-  const buildFilteredReviewQueue = (sourceData = data, stackType = reviewStackType, sublist = reviewSublist) => {
+  // Helper to compute filtered review queue from any state (supporting both AWL sublists and CEFR levels)
+  const buildFilteredReviewQueue = (
+    sourceData = data, 
+    stackType = reviewStackType, 
+    category = reviewCategory, 
+    sublist = reviewSublist, 
+    cefrLevel = reviewCefrLevel
+  ) => {
     let sourceList = stackType === 'stack2' ? (sourceData.stack2_spelling || []) : (sourceData.stack3_meaning || []);
-
     let filtered = sourceList.map(enrichWordWithAwl);
-    if (sublist === 'ALL') {
-      // keep all
-    } else if (sublist === 'OTHER') {
-      filtered = filtered.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+
+    if (category === 'AWL') {
+      if (sublist === 'ALL') {
+        // keep all in this review stack
+      } else if (sublist === 'OTHER') {
+        filtered = filtered.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+      } else {
+        const slNum = Number(sublist);
+        filtered = filtered.filter(w => {
+          const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+          return sub === slNum;
+        });
+      }
     } else {
-      const slNum = Number(sublist);
-      filtered = filtered.filter(w => {
-        const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-        return sub === slNum;
-      });
+      // category === 'CEFR'
+      if (cefrLevel === 'ALL') {
+        // keep all in this review stack
+      } else if (cefrLevel === 'IELTS_FOCUS') {
+        filtered = filtered.filter(w => w.level === 'B2' || w.level === 'C1');
+      } else {
+        filtered = filtered.filter(w => w.level === cefrLevel);
+      }
     }
     return filtered;
   };
 
-  // Helper to extract and enrich all words for a sublist template (with Red for spelling error, Purple for unknown meaning)
-  const getSublistTemplateWords = (sublistKey) => {
+  // Helper to extract and enrich all words for template view (AWL or CEFR) with Red for spelling error, Purple for unknown meaning
+  const getReviewTemplateWords = (
+    category = reviewCategory, 
+    key = (category === 'AWL' ? reviewSublist : reviewCefrLevel)
+  ) => {
     let baseList = [];
-    if (sublistKey === 'ALL') {
-      baseList = AWL_WORDS;
-    } else if (sublistKey === 'OTHER') {
-      baseList = (data.allWords || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
-      const extraStruggled = (data.struggledHistory || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+    if (category === 'AWL') {
+      if (key === 'ALL') {
+        baseList = [...AWL_WORDS];
+      } else if (key === 'OTHER') {
+        baseList = (data.allWords || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+        const extraStruggled = (data.struggledHistory || []).filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+        const seen = new Set(baseList.map(w => (w.word || '').toLowerCase()));
+        extraStruggled.forEach(w => {
+          const low = (w.word || '').toLowerCase();
+          if (!seen.has(low)) {
+            seen.add(low);
+            baseList.push(w);
+          }
+        });
+      } else {
+        const slNum = Number(key);
+        baseList = [...(AWL_WORDS_BY_SUBLIST[slNum] || [])];
+      }
+    } else {
+      // category === 'CEFR'
+      if (key === 'ALL') {
+        baseList = [...(data.allWords || [])];
+      } else if (key === 'IELTS_FOCUS') {
+        baseList = (data.allWords || []).filter(w => w.level === 'B2' || w.level === 'C1');
+      } else {
+        baseList = (data.allWords || []).filter(w => w.level === key);
+      }
+      // Ensure any words in struggledHistory with this level are also included in template
+      const extraStruggled = (data.struggledHistory || []).filter(w => {
+        if (key === 'ALL') return true;
+        if (key === 'IELTS_FOCUS') return w.level === 'B2' || w.level === 'C1';
+        return w.level === key;
+      });
       const seen = new Set(baseList.map(w => (w.word || '').toLowerCase()));
       extraStruggled.forEach(w => {
         const low = (w.word || '').toLowerCase();
@@ -427,9 +556,6 @@ export default function App() {
           baseList.push(w);
         }
       });
-    } else {
-      const slNum = Number(sublistKey);
-      baseList = AWL_WORDS_BY_SUBLIST[slNum] || [];
     }
 
     const s2Set = new Set((data.stack2_spelling || []).map(w => (w.word || '').toLowerCase()));
@@ -473,31 +599,38 @@ export default function App() {
     });
   };
 
-  // Review Queue snapshot - refreshed when reviewStackType, reviewSublist, or reviewTabMode changes
+  // Backward compatibility alias for any caller
+  const getSublistTemplateWords = (sublistKey) => getReviewTemplateWords('AWL', sublistKey);
+
+  // Review Queue snapshot - refreshed when reviewStackType, reviewCategory, reviewSublist, or reviewCefrLevel changes
   useEffect(() => {
-    if (activeTab === 'review') {
-      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist);
-      setReviewQueue(filtered);
-      setReviewIndex(0);
-      resetReviewInputs();
-    }
+    const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewCategory, reviewSublist, reviewCefrLevel);
+    setReviewQueue(filtered);
+    const key = getReviewKey(reviewCategory, reviewSublist, reviewCefrLevel);
+    const savedIdx = reviewProgressRef.current[key];
+    const targetIdx = (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < filtered.length)
+      ? savedIdx
+      : 0;
+    setReviewIndex(targetIdx);
+    resetReviewInputs();
   }, [
-    activeTab, 
     reviewStackType, 
-    reviewSublist
+    reviewCategory,
+    reviewSublist,
+    reviewCefrLevel
   ]);
 
   // If cloud data finishes loading and reviewQueue was empty, populate it without disrupting active review
   useEffect(() => {
-    if (activeTab === 'review' && reviewQueue.length === 0 && !reviewSubmitted) {
-      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewSublist);
+    if (reviewQueue.length === 0 && !reviewSubmitted) {
+      const filtered = buildFilteredReviewQueue(data, reviewStackType, reviewCategory, reviewSublist, reviewCefrLevel);
       if (filtered.length > 0) {
         setReviewQueue(filtered);
         setReviewIndex(0);
         resetReviewInputs();
       }
     }
-  }, [activeTab, (data.stack2_spelling || []).length, (data.stack3_meaning || []).length, (data.struggledHistory || []).length]);
+  }, [(data.stack2_spelling || []).length, (data.stack3_meaning || []).length, (data.struggledHistory || []).length]);
 
   const currentWord = queue[currentIndex];
   const currentReviewWord = reviewQueue[reviewIndex];
@@ -543,15 +676,15 @@ export default function App() {
     }
   }, [activeTab, currentIndex, selectedLevel, submitted]);
 
-  // Auto-play audio when review word appears (instant 50ms trigger!)
+  // Auto-play audio when review word appears (instant 50ms trigger in flashcard quiz!)
   useEffect(() => {
-    if (activeTab === 'review' && reviewQueue[reviewIndex] && !reviewSubmitted) {
+    if (activeTab === 'review' && reviewTabMode === 'active' && reviewQueue[reviewIndex] && !reviewSubmitted) {
       const timer = setTimeout(() => {
         playCurrentAudio(reviewQueue[reviewIndex].word);
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, reviewIndex, reviewStackType, reviewSubmitted, reviewQueue.length]);
+  }, [activeTab, reviewTabMode, reviewIndex, reviewStackType, reviewSubmitted, reviewQueue.length]);
 
   // Global Enter Key Listener: If on submitted / reveal screen, pressing Enter automatically goes to next word!
   useEffect(() => {
@@ -1016,32 +1149,46 @@ export default function App() {
       resetReviewInputs();
     } else {
       showToast('🎉 Review batch completed! Resetting to start.');
-      const refreshed = buildFilteredReviewQueue(data, reviewStackType, reviewSublist);
+      const refreshed = buildFilteredReviewQueue(data, reviewStackType, reviewCategory, reviewSublist, reviewCefrLevel);
       setReviewQueue(refreshed);
       setReviewIndex(0);
       resetReviewInputs();
     }
   };
 
-  // Repeat all struggled words for a specific sublist directly in Study Dictation mode
-  const handleRepeatSublistStruggledInStudy = (sublistNum) => {
+  // Repeat all struggled words for a specific review sublist or CEFR level directly in Study Dictation mode
+  const handleRepeatReviewStruggledInStudy = (category = reviewCategory, key = (category === 'AWL' ? reviewSublist : reviewCefrLevel)) => {
     let targetWords = [];
     const allStruggled = (data.struggledHistory || []).map(enrichWordWithAwl);
 
-    if (sublistNum === 'ALL') {
-      targetWords = allStruggled;
-    } else if (sublistNum === 'OTHER') {
-      targetWords = allStruggled.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+    if (category === 'AWL') {
+      if (key === 'ALL') {
+        targetWords = allStruggled;
+      } else if (key === 'OTHER') {
+        targetWords = allStruggled.filter(w => !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase()));
+      } else {
+        const slNum = Number(key);
+        targetWords = allStruggled.filter(w => {
+          const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+          return sub === slNum;
+        });
+      }
     } else {
-      const slNum = Number(sublistNum);
-      targetWords = allStruggled.filter(w => {
-        const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-        return sub === slNum;
-      });
+      if (key === 'ALL') {
+        targetWords = allStruggled;
+      } else if (key === 'IELTS_FOCUS') {
+        targetWords = allStruggled.filter(w => w.level === 'B2' || w.level === 'C1');
+      } else {
+        targetWords = allStruggled.filter(w => w.level === key);
+      }
     }
 
+    const label = category === 'AWL' 
+      ? (key === 'ALL' ? 'All AWL' : (key === 'OTHER' ? 'Other' : `Sublist ${key}`))
+      : (key === 'ALL' ? 'All Levels' : (key === 'IELTS_FOCUS' ? 'IELTS Academic (B2/C1)' : `Level ${key}`));
+
     if (targetWords.length === 0) {
-      showToast(`No review history recorded for Sublist ${sublistNum} yet.`);
+      showToast(`No review history recorded for ${label} yet.`);
       return;
     }
 
@@ -1049,12 +1196,16 @@ export default function App() {
     setQueue(shuffled);
     setCurrentIndex(0);
     resetStudyInputs();
-    setActiveTab('study');
-    showToast(`Loaded ${shuffled.length} words from Sublist ${sublistNum} review history into Dictation!`);
+    scrollPositionsRef.current['study'] = 0;
+    handleTabSwitch('study');
+    showToast(`Loaded ${shuffled.length} words from ${label} review history into Dictation!`);
     setTimeout(() => {
       if (shuffled[0]) playCurrentAudio(shuffled[0].word);
     }, 300);
   };
+
+  // Backward compatibility alias
+  const handleRepeatSublistStruggledInStudy = (sublistNum) => handleRepeatReviewStruggledInStudy('AWL', sublistNum);
 
   // Practice a single struggled word directly in Study Dictation mode
   const handlePracticeSingleWord = (wordObj) => {
@@ -1064,7 +1215,8 @@ export default function App() {
     setQueue([enriched, ...remaining]);
     setCurrentIndex(0);
     resetStudyInputs();
-    setActiveTab('study');
+    scrollPositionsRef.current['study'] = 0;
+    handleTabSwitch('study');
     showToast(`Loaded "${enriched.word}" into Active Dictation!`);
     setTimeout(() => {
       playCurrentAudio(enriched.word);
@@ -1075,7 +1227,7 @@ export default function App() {
   const handleSelectAwlSublist = (slNum) => {
     setSelectedLevel('AWL');
     setSelectedAwlSublist(slNum);
-    setActiveTab('study');
+    handleTabSwitch('study');
   };
 
   // Search feature actions: Add word to active practice queue
@@ -1086,7 +1238,8 @@ export default function App() {
     setQueue(updatedQueue);
     setCurrentIndex(0);
     resetStudyInputs();
-    setActiveTab('study');
+    scrollPositionsRef.current['study'] = 0;
+    handleTabSwitch('study');
     showToast(`Added "${wordObj.word}" to Active Practice Queue!`);
     setTimeout(() => {
       playCurrentAudio(wordObj.word);
@@ -1321,7 +1474,7 @@ export default function App() {
         {/* Top App Header */}
         <header className="app-topbar">
           <div className="topbar-left">
-            <div className="brand-badge" onClick={() => setActiveTab('study')} style={{ cursor: 'pointer' }}>
+            <div className="brand-badge" onClick={() => handleTabSwitch('study')} style={{ cursor: 'pointer' }}>
               <span className="brand-navy">lazy</span>
               <span className="brand-red">writyy</span>
               <span className="brand-dot"></span>
@@ -1373,7 +1526,7 @@ export default function App() {
             {/* Search Icon Button (Relocated to topbar header as requested) */}
             <button 
               className={`header-menu-btn header-search-btn ${activeTab === 'search' ? 'active' : ''}`}
-              onClick={() => setActiveTab(prev => prev === 'search' ? 'study' : 'search')}
+              onClick={() => handleTabSwitch(activeTab === 'search' ? 'study' : 'search')}
               title={activeTab === 'search' ? 'Back to Dictation' : 'Search Dictionary & AWL'}
               aria-label="Search Dictionary"
             >
@@ -1447,13 +1600,13 @@ export default function App() {
         <nav className="pill-nav-bar">
           <button 
             className={`pill-nav-btn ${activeTab === 'study' ? 'active' : ''}`}
-            onClick={() => setActiveTab('study')}
+            onClick={() => handleTabSwitch('study')}
           >
             🎧 Dictation
           </button>
           <button 
             className={`pill-nav-btn ${activeTab === 'review' ? 'active' : ''}`}
-            onClick={() => setActiveTab('review')}
+            onClick={() => handleTabSwitch('review')}
           >
             🔄 Review
             {(data.stack2_spelling.length + data.stack3_meaning.length) > 0 && (
@@ -1464,7 +1617,7 @@ export default function App() {
           </button>
           <button 
             className={`pill-nav-btn ${activeTab === 'notes' ? 'active' : ''}`}
-            onClick={() => setActiveTab('notes')}
+            onClick={() => handleTabSwitch('notes')}
           >
             📝 Notes
             {(data.notes || []).length > 0 && (
@@ -1478,8 +1631,7 @@ export default function App() {
         {/* ============================================================ */}
         {/* VIEW 1: AUDITORY DICTATION & ACTIVE RECALL */}
         {/* ============================================================ */}
-        {activeTab === 'study' && (
-          <div className="view-content fade-in">
+        <div className="view-content" style={{ display: activeTab === 'study' ? 'block' : 'none' }}>
             {/* Level Selector Carousel (Image 1 topics filter style) */}
             <div className="section-label-row">
               <span className="section-label">Select Difficulty</span>
@@ -1866,25 +2018,23 @@ export default function App() {
               </div>
             )}
           </div>
-        )}
 
         {/* ============================================================ */}
         {/* VIEW 2: OFFLINE SEARCH & ADD TO ACTIVE QUEUE */}
         {/* ============================================================ */}
-        {activeTab === 'search' && (
-          <div className="view-content fade-in">
-            <div className="search-view-container">
-              <div className="search-header-box">
-                <div className="search-top-header-row">
-                  <span className="search-tagline">Offline Lexicon ({data.allWords.length} words loaded)</span>
-                  <button 
-                    type="button"
-                    className="search-close-pill-btn"
-                    onClick={() => setActiveTab('study')}
-                    title="Return to Dictation"
-                  >
-                    ← Back to Dictation
-                  </button>
+        <div className="view-content" style={{ display: activeTab === 'search' ? 'block' : 'none' }}>
+          <div className="search-view-container">
+            <div className="search-header-box">
+              <div className="search-top-header-row">
+                <span className="search-tagline">Offline Lexicon ({data.allWords.length} words loaded)</span>
+                <button 
+                  type="button"
+                  className="search-close-pill-btn"
+                  onClick={() => handleTabSwitch('study')}
+                  title="Return to Dictation"
+                >
+                  ← Back to Dictation
+                </button>
                 </div>
                 <h2 className="search-title">Search & Add Words</h2>
                 
@@ -1990,29 +2140,25 @@ export default function App() {
               </div>
             </div>
           </div>
-        )}
 
         {/* ============================================================ */}
         {/* VIEW: NOTION STUDY NOTES & NOTE TAKER */}
         {/* ============================================================ */}
-        {activeTab === 'notes' && (
-          <div className="view-content fade-in">
-            <NotesView 
-              notes={data.notes || []}
-              onSaveNote={handleSaveNote}
-              onDeleteNote={handleDeleteNote}
-              onPinNote={handlePinNote}
-              showToast={showToast}
-              currentUser={currentUser}
-            />
-          </div>
-        )}
+        <div className="view-content" style={{ display: activeTab === 'notes' ? 'block' : 'none' }}>
+          <NotesView 
+            notes={data.notes || []}
+            onSaveNote={handleSaveNote}
+            onDeleteNote={handleDeleteNote}
+            onPinNote={handlePinNote}
+            showToast={showToast}
+            currentUser={currentUser}
+          />
+        </div>
 
         {/* ============================================================ */}
         {/* VIEW 3: ADAPTIVE REVIEW MODE (STACK 2 & STACK 3) */}
         {/* ============================================================ */}
-        {activeTab === 'review' && (
-          <div className="view-content fade-in">
+        <div className="view-content" style={{ display: activeTab === 'review' ? 'block' : 'none' }}>
             {/* Top Review Mode Switcher: Template View vs Flashcard Quiz */}
             <div className="review-main-mode-toggle">
               <button 
@@ -2047,50 +2193,121 @@ export default function App() {
               </div>
             )}
 
-            {/* AWL Sublist Filter Pills for Review Mode with Error Indicators */}
-            <div className="review-awl-pills-row">
-              {AWL_SUBLISTS.map(sl => {
-                const slWords = getSublistTemplateWords(sl);
-                const redCount = slWords.filter(w => w.isSpellingWrong).length;
-                const purpleCount = slWords.filter(w => w.isMeaningUnknown).length;
-                const isSelected = String(reviewSublist) === String(sl);
-                return (
-                  <button
-                    key={sl}
-                    className={`review-sub-pill ${isSelected ? 'active' : ''}`}
-                    onClick={() => setReviewSublist(sl)}
-                  >
-                    <span>Sub {sl}</span>
-                    {(redCount > 0 || purpleCount > 0) && (
+            {/* Primary Category Switcher: AWL vs IELTS & CEFR */}
+            <div className="review-category-toggle-bar">
+              <button 
+                type="button"
+                className={`review-cat-btn ${reviewCategory === 'AWL' ? 'active' : ''}`}
+                onClick={() => setReviewCategory('AWL')}
+              >
+                🎓 Academic Word List (AWL)
+              </button>
+              <button 
+                type="button"
+                className={`review-cat-btn ${reviewCategory === 'CEFR' ? 'active' : ''}`}
+                onClick={() => setReviewCategory('CEFR')}
+              >
+                📚 IELTS & CEFR (A1–C1)
+              </button>
+            </div>
+
+            {/* Sublist / CEFR Tier Filter Pills for Review Mode with Error Indicators */}
+            {reviewCategory === 'AWL' ? (
+              <div className="review-awl-pills-row">
+                {AWL_SUBLISTS.map(sl => {
+                  const slWords = getReviewTemplateWords('AWL', sl);
+                  const redCount = slWords.filter(w => w.isSpellingWrong).length;
+                  const purpleCount = slWords.filter(w => w.isMeaningUnknown).length;
+                  const isSelected = String(reviewSublist) === String(sl);
+                  return (
+                    <button
+                      key={sl}
+                      className={`review-sub-pill ${isSelected ? 'active' : ''}`}
+                      onClick={() => setReviewSublist(sl)}
+                    >
+                      <span>Sub {sl}</span>
+                      {(redCount > 0 || purpleCount > 0) && (
+                        <span className="sub-pill-error-dots">
+                          {redCount > 0 && <span className="dot-red" title={`${redCount} written wrong`}>{redCount}</span>}
+                          {purpleCount > 0 && <span className="dot-purple" title={`${purpleCount} unknown meaning`}>{purpleCount}</span>}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                <button
+                  className={`review-sub-pill ${reviewSublist === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setReviewSublist('ALL')}
+                >
+                  <span>All AWL</span>
+                  {(() => {
+                    const allWords = getReviewTemplateWords('AWL', 'ALL');
+                    const redCount = allWords.filter(w => w.isSpellingWrong).length;
+                    const purpleCount = allWords.filter(w => w.isMeaningUnknown).length;
+                    return (redCount > 0 || purpleCount > 0) ? (
                       <span className="sub-pill-error-dots">
                         {redCount > 0 && <span className="dot-red" title={`${redCount} written wrong`}>{redCount}</span>}
                         {purpleCount > 0 && <span className="dot-purple" title={`${purpleCount} unknown meaning`}>{purpleCount}</span>}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
-              <button
-                className={`review-sub-pill ${reviewSublist === 'ALL' ? 'active' : ''}`}
-                onClick={() => setReviewSublist('ALL')}
-              >
-                <span>All AWL</span>
-              </button>
-              <button
-                className={`review-sub-pill ${reviewSublist === 'OTHER' ? 'active' : ''}`}
-                onClick={() => setReviewSublist('OTHER')}
-              >
-                <span>Other</span>
-              </button>
-            </div>
+                    ) : null;
+                  })()}
+                </button>
+                <button
+                  className={`review-sub-pill ${reviewSublist === 'OTHER' ? 'active' : ''}`}
+                  onClick={() => setReviewSublist('OTHER')}
+                >
+                  <span>Other</span>
+                  {(() => {
+                    const otherWords = getReviewTemplateWords('AWL', 'OTHER');
+                    const redCount = otherWords.filter(w => w.isSpellingWrong).length;
+                    const purpleCount = otherWords.filter(w => w.isMeaningUnknown).length;
+                    return (redCount > 0 || purpleCount > 0) ? (
+                      <span className="sub-pill-error-dots">
+                        {redCount > 0 && <span className="dot-red" title={`${redCount} written wrong`}>{redCount}</span>}
+                        {purpleCount > 0 && <span className="dot-purple" title={`${purpleCount} unknown meaning`}>{purpleCount}</span>}
+                      </span>
+                    ) : null;
+                  })()}
+                </button>
+              </div>
+            ) : (
+              <div className="review-awl-pills-row review-cefr-pills-row">
+                {REVIEW_CEFR_TIERS.map(tier => {
+                  const tierWords = getReviewTemplateWords('CEFR', tier.key);
+                  const redCount = tierWords.filter(w => w.isSpellingWrong).length;
+                  const purpleCount = tierWords.filter(w => w.isMeaningUnknown).length;
+                  const isSelected = reviewCefrLevel === tier.key;
+                  return (
+                    <button
+                      key={tier.key}
+                      className={`review-sub-pill ${tier.key === 'IELTS_FOCUS' ? 'ielts-tier-pill' : ''} ${isSelected ? 'active' : ''}`}
+                      onClick={() => setReviewCefrLevel(tier.key)}
+                    >
+                      <span>{tier.label}</span>
+                      {(redCount > 0 || purpleCount > 0) && (
+                        <span className="sub-pill-error-dots">
+                          {redCount > 0 && <span className="dot-red" title={`${redCount} written wrong`}>{redCount}</span>}
+                          {purpleCount > 0 && <span className="dot-purple" title={`${purpleCount} unknown meaning`}>{purpleCount}</span>}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {reviewTabMode === 'template' ? (
               (() => {
-                const templateAllWords = getSublistTemplateWords(reviewSublist);
+                const currentCategoryKey = reviewCategory === 'AWL' ? reviewSublist : reviewCefrLevel;
+                const templateAllWords = getReviewTemplateWords(reviewCategory, currentCategoryKey);
                 const countWrong = templateAllWords.filter(w => w.isSpellingWrong).length;
                 const countMeaning = templateAllWords.filter(w => w.isMeaningUnknown).length;
                 const countMastered = templateAllWords.filter(w => w.isMastered).length;
                 const countUntested = templateAllWords.filter(w => w.isUntested).length;
+
+                const currentLabel = reviewCategory === 'AWL'
+                  ? (reviewSublist === 'ALL' ? 'all AWL' : (reviewSublist === 'OTHER' ? 'other' : `Sublist ${reviewSublist}`))
+                  : (reviewCefrLevel === 'ALL' ? 'all CEFR' : (reviewCefrLevel === 'IELTS_FOCUS' ? 'IELTS Academic (B2/C1)' : `Level ${reviewCefrLevel}`));
 
                 const templateFilteredWords = templateAllWords.filter(w => {
                   if (templateFilter === 'WRONG' && !w.isSpellingWrong) return false;
@@ -2117,7 +2334,7 @@ export default function App() {
                         <input 
                           type="text"
                           className="template-search-input"
-                          placeholder={`Search in ${reviewSublist === 'ALL' ? 'all AWL' : `Sublist ${reviewSublist}`} words...`}
+                          placeholder={`Search in ${currentLabel} words...`}
                           value={templateSearch}
                           onChange={(e) => setTemplateSearch(e.target.value)}
                         />
@@ -2487,29 +2704,48 @@ export default function App() {
                 <div className="empty-state-card">
                   <span className="empty-icon">🎉</span>
                   <h3>
-                    {reviewSublist === 'ALL' 
-                      ? (reviewStackType === 'stack2' ? 'Stack 2 is Clean!' : 'Stack 3 is Clean!')
-                      : `Sublist ${reviewSublist} Review Cleared!`}
+                    {reviewCategory === 'AWL' 
+                      ? (reviewSublist === 'ALL' 
+                          ? (reviewStackType === 'stack2' ? 'Stack 2 is Clean!' : 'Stack 3 is Clean!')
+                          : `Sublist ${reviewSublist} Review Cleared!`)
+                      : (reviewCefrLevel === 'ALL'
+                          ? (reviewStackType === 'stack2' ? 'Stack 2 is Clean!' : 'Stack 3 is Clean!')
+                          : `${reviewCefrLevel === 'IELTS_FOCUS' ? 'IELTS Academic (B2/C1)' : `Level ${reviewCefrLevel}`} Review Cleared!`)}
                   </h3>
                   <p>
-                    {reviewSublist === 'ALL'
-                      ? `No words currently waiting in ${reviewStackType === 'stack2' ? 'Stack 2 (Spelling Errors)' : 'Stack 3 (Unknown Meaning)'}.`
-                      : `All review words in Sublist ${reviewSublist} have been resolved. They remain stored in your Review History Bank.`}
+                    {reviewCategory === 'AWL'
+                      ? (reviewSublist === 'ALL'
+                          ? `No words currently waiting in ${reviewStackType === 'stack2' ? 'Stack 2 (Spelling Errors)' : 'Stack 3 (Unknown Meaning)'}.`
+                          : `All review words in Sublist ${reviewSublist} have been resolved. They remain stored in your Review History Bank.`)
+                      : (reviewCefrLevel === 'ALL'
+                          ? `No words currently waiting in ${reviewStackType === 'stack2' ? 'Stack 2 (Spelling Errors)' : 'Stack 3 (Unknown Meaning)'}.`
+                          : `All review words in ${reviewCefrLevel === 'IELTS_FOCUS' ? 'IELTS Academic (B2/C1)' : `Level ${reviewCefrLevel}`} have been resolved. They remain stored in your Review History Bank.`)}
                   </p>
                   <div className="empty-action-buttons">
                     {(() => {
-                      const historyWordsForSub = (data.struggledHistory || []).filter(w => {
-                        if (reviewSublist === 'ALL') return true;
-                        if (reviewSublist === 'OTHER') return !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase());
-                        const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
-                        return sub === Number(reviewSublist);
+                      const historyWordsForCurrent = (data.struggledHistory || []).filter(w => {
+                        if (reviewCategory === 'AWL') {
+                          if (reviewSublist === 'ALL') return true;
+                          if (reviewSublist === 'OTHER') return !w.awlSublist && !AWL_MAP.has((w.word || '').toLowerCase());
+                          const sub = w.awlSublist || AWL_MAP.get((w.word || '').toLowerCase());
+                          return sub === Number(reviewSublist);
+                        } else {
+                          if (reviewCefrLevel === 'ALL') return true;
+                          if (reviewCefrLevel === 'IELTS_FOCUS') return w.level === 'B2' || w.level === 'C1';
+                          return w.level === reviewCefrLevel;
+                        }
                       });
-                      return historyWordsForSub.length > 0 ? (
+                      const currentCategoryKey = reviewCategory === 'AWL' ? reviewSublist : reviewCefrLevel;
+                      const currentLabel = reviewCategory === 'AWL'
+                        ? (reviewSublist === 'ALL' ? 'all AWL' : (reviewSublist === 'OTHER' ? 'other' : `Sublist ${reviewSublist}`))
+                        : (reviewCefrLevel === 'ALL' ? 'all CEFR' : (reviewCefrLevel === 'IELTS_FOCUS' ? 'IELTS Academic (B2/C1)' : `Level ${reviewCefrLevel}`));
+
+                      return historyWordsForCurrent.length > 0 ? (
                         <button
                           className="cta-red-button"
-                          onClick={() => handleRepeatSublistStruggledInStudy(reviewSublist)}
+                          onClick={() => handleRepeatReviewStruggledInStudy(reviewCategory, currentCategoryKey)}
                         >
-                          ⚡ Repeat {reviewSublist === 'ALL' ? 'All' : `Sublist ${reviewSublist}`} Review Words ({historyWordsForSub.length})
+                          ⚡ Repeat {currentLabel} Review Words ({historyWordsForCurrent.length})
                         </button>
                       ) : null;
                     })()}
@@ -2517,11 +2753,11 @@ export default function App() {
                       className="ghost-pill-btn"
                       onClick={() => setReviewTabMode('template')}
                     >
-                      📑 View Sublist Template View
+                      📑 View Template View
                     </button>
                     <button 
                       className="cta-navy-button"
-                      onClick={() => setActiveTab('study')}
+                      onClick={() => handleTabSwitch('study')}
                     >
                       Return to Dictation
                     </button>
@@ -2530,7 +2766,6 @@ export default function App() {
               )
             )}
           </div>
-        )}
 
       </div>
 
