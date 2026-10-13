@@ -39,11 +39,51 @@ export const getTodayKey = () => {
   return `${year}-${month}-${day}`;
 };
 
-export const getStoredData = () => {
+// Determine active user email from session
+export const getActiveUserEmail = () => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('writyy_app_data_v1');
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('writyy_neon_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.email) {
+          return parsed.email.trim().toLowerCase();
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
+};
+
+// Return account-scoped storage key
+export const getUserStorageKey = (userOrEmail) => {
+  let email = null;
+  if (userOrEmail !== undefined && userOrEmail !== null) {
+    email = typeof userOrEmail === 'string' ? userOrEmail : userOrEmail?.email;
+  } else {
+    email = getActiveUserEmail();
+  }
+
+  if (!email || typeof email !== 'string' || !email.trim()) {
+    return 'writyy_guest_data';
+  }
+
+  const safeKey = email.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  return `writyy_user_${safeKey}_data`;
+};
+
+export const getStoredData = (userOrEmail) => {
+  const targetKey = getUserStorageKey(userOrEmail);
+  try {
+    let raw = typeof localStorage !== 'undefined' ? localStorage.getItem(targetKey) : null;
+    
+    // If guest key has nothing, check legacy storage keys so guest work is never lost
+    if (!raw && targetKey === 'writyy_guest_data' && typeof localStorage !== 'undefined') {
+      raw = localStorage.getItem('writyy_app_data_v2') || localStorage.getItem('writyy_app_data_v1');
+    }
+
     if (!raw) {
-      return initializeDefaultData();
+      return initializeDefaultData(userOrEmail);
     }
     const parsed = JSON.parse(raw);
     
@@ -107,17 +147,20 @@ export const getStoredData = () => {
       }
     };
 
-    saveStoredData(merged);
+    saveStoredData(merged, userOrEmail);
     return merged;
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
-    return initializeDefaultData();
+    return initializeDefaultData(userOrEmail);
   }
 };
 
-export const saveStoredData = (data) => {
+export const saveStoredData = (data, userOrEmail) => {
+  const targetKey = getUserStorageKey(userOrEmail);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(targetKey, JSON.stringify(data));
+    }
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
   }
@@ -199,7 +242,7 @@ export const getInitialSampleNotes = () => [
   }
 ];
 
-export const initializeDefaultData = () => {
+export const initializeDefaultData = (userOrEmail) => {
   const initial = {
     allWords: ensureAwlEnriched(INITIAL_WORDS),
     stack1_mastered: [],
@@ -215,12 +258,12 @@ export const initializeDefaultData = () => {
       daily: {}
     }
   };
-  saveStoredData(initial);
+  saveStoredData(initial, userOrEmail);
   return initial;
 };
 
-export const resetAllProgress = () => {
-  const current = getStoredData();
+export const resetAllProgress = (userOrEmail) => {
+  const current = getStoredData(userOrEmail);
   const resetData = {
     allWords: ensureAwlEnriched(current.allWords || INITIAL_WORDS),
     stack1_mastered: [],
@@ -236,7 +279,7 @@ export const resetAllProgress = () => {
       daily: {}
     }
   };
-  saveStoredData(resetData);
+  saveStoredData(resetData, userOrEmail);
   return resetData;
 };
 

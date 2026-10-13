@@ -4,23 +4,33 @@ import { neon } from '@neondatabase/serverless';
 const STORAGE_URL_KEY = 'writyy_neon_url';
 const STORAGE_SESSION_KEY = 'writyy_neon_session';
 
+export function saveSession(userSession) {
+  try {
+    if (typeof localStorage !== 'undefined' && userSession) {
+      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+    }
+  } catch (e) {}
+}
+
 const DEFAULT_NEON_URL = 'postgresql://neondb_owner:npg_L9Gj3gmcASvO@ep-wispy-truth-b16e8gbw-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 const DEFAULT_GOOGLE_CLIENT_ID = '158574308883-8f61eeshd0kccirl57hb4vqaq9a9epmf.apps.googleusercontent.com';
 
 export function getGoogleClientId() {
-  return import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+  return (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GOOGLE_CLIENT_ID) || DEFAULT_GOOGLE_CLIENT_ID;
 }
 
 // Retrieve active Neon connection string
 export function getNeonUrl() {
   try {
-    const custom = localStorage.getItem(STORAGE_URL_KEY);
-    if (custom && custom.trim().length > 10) {
-      return custom.trim();
+    if (typeof localStorage !== 'undefined') {
+      const custom = localStorage.getItem(STORAGE_URL_KEY);
+      if (custom && custom.trim().length > 10) {
+        return custom.trim();
+      }
     }
   } catch (e) {}
 
-  return import.meta.env.VITE_NEON_DATABASE_URL || DEFAULT_NEON_URL;
+  return (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_NEON_DATABASE_URL) || DEFAULT_NEON_URL;
 }
 
 export function saveNeonUrl(url) {
@@ -103,7 +113,7 @@ export async function signUpWithEmail(email, password, displayName = '', existin
         email: cleanEmail,
         displayName: userData.displayName || cleanEmail.split('@')[0]
       };
-      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+      saveSession(userSession);
       return { user: userSession, data: userData, autoLoggedIn: true };
     } else {
       throw new Error('An account with this email already exists. Please enter your password and click "Sign In".');
@@ -115,8 +125,10 @@ export async function signUpWithEmail(email, password, displayName = '', existin
     stack1_mastered: existingData.stack1_mastered || [],
     stack2_spelling: existingData.stack2_spelling || [],
     stack3_meaning: existingData.stack3_meaning || [],
+    struggledHistory: existingData.struggledHistory || [],
+    notes: existingData.notes || [],
     customWords: (existingData.allWords || []).filter(w => w.id && w.id.startsWith('custom_')),
-    stats: existingData.stats || { totalTested: 0, correctSpelling: 0 },
+    stats: existingData.stats || { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
     history: (existingData.history || []).slice(-100),
     lastUpdated: new Date().toISOString()
   } : {
@@ -124,8 +136,10 @@ export async function signUpWithEmail(email, password, displayName = '', existin
     stack1_mastered: [],
     stack2_spelling: [],
     stack3_meaning: [],
+    struggledHistory: [],
+    notes: [],
     customWords: [],
-    stats: { totalTested: 0, correctSpelling: 0 },
+    stats: { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
     history: [],
     lastUpdated: new Date().toISOString()
   };
@@ -137,9 +151,10 @@ export async function signUpWithEmail(email, password, displayName = '', existin
 
   const userSession = {
     email: cleanEmail,
-    displayName: payloadData.displayName
+    displayName: payloadData.displayName,
+    provider: 'email'
   };
-  localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+  saveSession(userSession);
   return { user: userSession, data: payloadData, autoLoggedIn: false };
 }
 
@@ -173,10 +188,11 @@ export async function loginWithEmail(email, password) {
   const userData = rows[0].data || {};
   const userSession = {
     email: cleanEmail,
-    displayName: userData.displayName || cleanEmail.split('@')[0]
+    displayName: userData.displayName || cleanEmail.split('@')[0],
+    provider: 'email'
   };
 
-  localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+  saveSession(userSession);
   return { user: userSession, data: userData };
 }
 
@@ -242,8 +258,10 @@ export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData =
       stack1_mastered: existingLocalData.stack1_mastered || [],
       stack2_spelling: existingLocalData.stack2_spelling || [],
       stack3_meaning: existingLocalData.stack3_meaning || [],
+      struggledHistory: existingLocalData.struggledHistory || [],
+      notes: existingLocalData.notes || [],
       customWords: (existingLocalData.allWords || []).filter(w => w.id && w.id.startsWith('custom_')),
-      stats: existingLocalData.stats || { totalTested: 0, correctSpelling: 0 },
+      stats: existingLocalData.stats || { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
       history: (existingLocalData.history || []).slice(-100),
       lastUpdated: new Date().toISOString()
     } : {
@@ -252,8 +270,10 @@ export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData =
       stack1_mastered: [],
       stack2_spelling: [],
       stack3_meaning: [],
+      struggledHistory: [],
+      notes: [],
       customWords: [],
-      stats: { totalTested: 0, correctSpelling: 0 },
+      stats: { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
       history: [],
       lastUpdated: new Date().toISOString()
     };
@@ -272,7 +292,7 @@ export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData =
     provider: 'google'
   };
 
-  localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(userSession));
+  saveSession(userSession);
   return { user: userSession, data: userData };
 }
 
@@ -328,3 +348,86 @@ export async function pushUserData(email, dataPayload) {
     return false;
   }
 }
+
+// Change or Set Password for Account
+export async function changePassword(email, currentPassword, newPassword) {
+  const sql = getSql();
+  if (!sql) {
+    throw new Error('Database connection is offline. Connect to internet to change password.');
+  }
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) {
+    throw new Error('No user email specified.');
+  }
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('New password must be at least 6 characters long.');
+  }
+
+  const rows = await sql`
+    SELECT id, password_hash FROM writyy_users WHERE LOWER(email) = ${cleanEmail} LIMIT 1
+  `;
+  if (!rows || rows.length === 0) {
+    throw new Error('User account not found in database.');
+  }
+
+  const existingHash = rows[0].password_hash;
+  const isGoogleOAuthOnly = existingHash && existingHash.startsWith('google_oauth_');
+
+  // If user has an existing email password, check current password
+  if (!isGoogleOAuthOnly) {
+    if (!currentPassword) {
+      throw new Error('Please enter your current password.');
+    }
+    const currentHash = await hashPassword(currentPassword);
+    if (currentHash !== existingHash) {
+      throw new Error('Current password is incorrect.');
+    }
+  }
+
+  const newHash = await hashPassword(newPassword);
+  await sql`
+    UPDATE writyy_users 
+    SET password_hash = ${newHash}, updated_at = NOW() 
+    WHERE LOWER(email) = ${cleanEmail}
+  `;
+  return true;
+}
+
+// Update User Display Name
+export async function updateProfileDisplayName(email, newDisplayName) {
+  const sql = getSql();
+  if (!sql) {
+    throw new Error('Database connection is offline.');
+  }
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const trimmed = (newDisplayName || '').trim();
+  if (!trimmed) {
+    throw new Error('Display name cannot be empty.');
+  }
+
+  const rows = await sql`
+    SELECT data FROM writyy_users WHERE LOWER(email) = ${cleanEmail} LIMIT 1
+  `;
+  if (!rows || rows.length === 0) {
+    throw new Error('User account not found.');
+  }
+
+  const currentData = rows[0].data || {};
+  currentData.displayName = trimmed;
+
+  await sql`
+    UPDATE writyy_users 
+    SET data = ${JSON.stringify(currentData)}::jsonb, updated_at = NOW() 
+    WHERE LOWER(email) = ${cleanEmail}
+  `;
+
+  // Update session in localStorage
+  const currentSession = getCurrentUser();
+  if (currentSession && currentSession.email?.toLowerCase() === cleanEmail) {
+    currentSession.displayName = trimmed;
+    saveSession(currentSession);
+  }
+
+  return currentData;
+}
+

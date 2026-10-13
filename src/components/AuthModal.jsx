@@ -7,7 +7,9 @@ import {
   getNeonUrl, 
   saveNeonUrl, 
   getGoogleClientId,
-  isNeonConfigured 
+  isNeonConfigured,
+  changePassword,
+  updateProfileDisplayName
 } from '../utils/neonDb';
 import { getStoredData } from '../utils/storage';
 
@@ -39,6 +41,19 @@ export default function AuthModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Profile Display Name State
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  // Change Password State
+  const [showPwdPanel, setShowPwdPanel] = useState(false);
+  const [currPwd, setCurrPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [pwdFeedback, setPwdFeedback] = useState({ text: '', type: '' });
+  const [isSavingPwd, setIsSavingPwd] = useState(false);
 
   const googleBtnContainerRef = useRef(null);
 
@@ -144,6 +159,59 @@ export default function AuthModal({
     setTimeout(() => onClose(), 600);
   };
 
+  const handleStartEditName = () => {
+    setNameInput(currentUser?.displayName || '');
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) return;
+    setIsSavingName(true);
+    setErrorMsg('');
+    try {
+      await updateProfileDisplayName(currentUser.email, trimmed);
+      const updated = { ...currentUser, displayName: trimmed };
+      if (onUserAuthChange) onUserAuthChange(updated, data);
+      setIsEditingName(false);
+      setSuccessMsg('✓ Name updated successfully.');
+      setTimeout(() => setSuccessMsg(''), 2500);
+    } catch (e) {
+      setErrorMsg(e.message || 'Failed to update name.');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPwdFeedback({ text: '', type: '' });
+    if (!newPwd || newPwd.length < 6) {
+      setPwdFeedback({ text: 'New password must be at least 6 characters long.', type: 'error' });
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setPwdFeedback({ text: 'New passwords do not match.', type: 'error' });
+      return;
+    }
+    setIsSavingPwd(true);
+    try {
+      await changePassword(currentUser.email, currPwd, newPwd);
+      setPwdFeedback({ text: '✓ Password changed successfully!', type: 'success' });
+      setCurrPwd('');
+      setNewPwd('');
+      setConfirmPwd('');
+      setTimeout(() => {
+        setShowPwdPanel(false);
+        setPwdFeedback({ text: '', type: '' });
+      }, 2500);
+    } catch (err) {
+      setPwdFeedback({ text: err.message || 'Failed to change password.', type: 'error' });
+    } finally {
+      setIsSavingPwd(false);
+    }
+  };
+
   const handleSaveConfig = () => {
     const trimmed = (neonUrlInput || '').trim();
     if (!trimmed.startsWith('postgres')) {
@@ -246,12 +314,136 @@ export default function AuthModal({
                 )}
               </div>
               <div className="user-profile-meta">
-                <span className="user-name-title">{currentUser.displayName || 'Vocabulary Learner'}</span>
+                {isEditingName ? (
+                  <div className="edit-name-inline-wrap">
+                    <input 
+                      type="text" 
+                      className="edit-name-input"
+                      value={nameInput} 
+                      onChange={(e) => setNameInput(e.target.value)}
+                      placeholder="Your Name"
+                    />
+                    <button type="button" className="btn-save-name-tiny" onClick={handleSaveName} disabled={isSavingName}>
+                      {isSavingName ? '...' : 'Save'}
+                    </button>
+                    <button type="button" className="btn-cancel-name-tiny" onClick={() => setIsEditingName(false)}>✕</button>
+                  </div>
+                ) : (
+                  <div className="user-name-row">
+                    <span className="user-name-title">{currentUser.displayName || 'Vocabulary Learner'}</span>
+                    <button type="button" className="btn-edit-name-trigger" onClick={handleStartEditName} title="Change display name">✏️</button>
+                  </div>
+                )}
                 <span className="user-email-text">{currentUser.email}</span>
                 <span className="user-sync-badge">
                   {currentUser.provider === 'google' ? '🟢 Google Account & Neon Synced' : '🟢 Connected to Neon Database'}
                 </span>
               </div>
+            </div>
+
+            {/* Account Database Details Card */}
+            <div className="account-database-card">
+              <div className="account-database-title">
+                <span>🗄️ Database & Account Storage</span>
+                <span className="db-status-pill">Active & Isolated</span>
+              </div>
+              <div className="account-db-details-grid">
+                <div className="account-db-detail-item">
+                  <span className="db-item-label">Server</span>
+                  <span className="db-item-value">Neon Serverless PostgreSQL</span>
+                </div>
+                <div className="account-db-detail-item">
+                  <span className="db-item-label">Account Store</span>
+                  <span className="db-item-value">{currentUser.email}</span>
+                </div>
+                <div className="account-db-detail-item">
+                  <span className="db-item-label">Data Privacy</span>
+                  <span className="db-item-value">✓ 100% Isolated Data Store</span>
+                </div>
+                <div className="account-db-detail-item">
+                  <span className="db-item-label">Offline Ready</span>
+                  <span className="db-item-value">✓ Cached Locally & Auto-Synced</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Account Security (Password Management) */}
+            <div className="account-security-card">
+              <div className="account-security-header">
+                <div className="security-title-left">
+                  <span>🔑 Password & Security</span>
+                </div>
+                <button 
+                  type="button"
+                  className="security-toggle-btn"
+                  onClick={() => setShowPwdPanel(prev => !prev)}
+                >
+                  {showPwdPanel ? 'Close' : 'Change Password'}
+                </button>
+              </div>
+
+              {showPwdPanel && (
+                <form onSubmit={handleChangePasswordSubmit} className="security-pwd-form fade-in">
+                  {currentUser.provider === 'google' && (
+                    <p className="security-pwd-hint">
+                      Your account uses Google OAuth. You can set a password here to also enable direct email sign-in.
+                    </p>
+                  )}
+
+                  {currentUser.provider !== 'google' && (
+                    <div className="form-group-custom">
+                      <label>Current Password</label>
+                      <input 
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={currPwd}
+                        onChange={(e) => setCurrPwd(e.target.value)}
+                        disabled={isSavingPwd}
+                      />
+                    </div>
+                  )}
+
+                  <div className="form-group-custom">
+                    <label>New Password (min 6 characters)</label>
+                    <input 
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={newPwd}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      disabled={isSavingPwd}
+                    />
+                  </div>
+
+                  <div className="form-group-custom">
+                    <label>Confirm New Password</label>
+                    <input 
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={confirmPwd}
+                      onChange={(e) => setConfirmPwd(e.target.value)}
+                      disabled={isSavingPwd}
+                    />
+                  </div>
+
+                  {pwdFeedback.text && (
+                    <div className={`auth-alert ${pwdFeedback.type === 'success' ? 'success-alert' : 'error-alert'}`}>
+                      <span>{pwdFeedback.text}</span>
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit" 
+                    className="cta-red-button"
+                    disabled={isSavingPwd}
+                    style={{ marginTop: '10px' }}
+                  >
+                    <span>{isSavingPwd ? 'Updating Password...' : 'Save New Password'}</span>
+                  </button>
+                </form>
+              )}
             </div>
 
             {/* Strict XP & Comprehensive Learning Statistics */}

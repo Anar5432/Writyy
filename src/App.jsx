@@ -14,6 +14,7 @@ import {
 } from './utils/cloudSync';
 import AuthModal from './components/AuthModal';
 import NotesView from './components/NotesView';
+import AuthLandingView from './components/AuthLandingView';
 import './App.css';
 
 export default function App() {
@@ -79,6 +80,13 @@ export default function App() {
 
   // Neon Auth & Cloud Sync State
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [isGuestMode, setIsGuestMode] = useState(() => {
+    try {
+      return Boolean(localStorage.getItem('writyy_guest_session'));
+    } catch (e) {
+      return false;
+    }
+  });
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
@@ -1238,6 +1246,47 @@ export default function App() {
   // Waveform Bar Heights (for animation)
   const waveHeights = [20, 36, 48, 28, 55, 70, 42, 60, 80, 50, 65, 85, 45, 75, 55, 38, 62, 44, 30, 18];
 
+  // Unauthenticated Visitor Landing Screen
+  if (!currentUser && !isGuestMode) {
+    return (
+      <div className="app-canvas">
+        {toastMsg && (
+          <div className="toast-notification">
+            <span>✨ {toastMsg}</span>
+          </div>
+        )}
+        <AuthLandingView 
+          onAuthSuccess={(user, initialData) => {
+            setCurrentUser(user);
+            setIsGuestMode(false);
+            try {
+              localStorage.removeItem('writyy_guest_session');
+            } catch (e) {}
+            if (initialData) {
+              const currentLocal = getStoredData(user);
+              const merged = mergeCloudAndLocal(currentLocal, initialData);
+              setData(merged);
+              saveStoredData(merged, user);
+              pushProgressToCloud(user, merged);
+              setLastSyncTime(new Date());
+            } else {
+              setData(getStoredData(user));
+            }
+            showToast(`🎉 Welcome to Writyy, ${user.displayName || 'Learner'}!`);
+          }}
+          onContinueAsGuest={() => {
+            setIsGuestMode(true);
+            try {
+              localStorage.setItem('writyy_guest_session', 'true');
+            } catch (e) {}
+            setData(getStoredData(null));
+            showToast('⚡ Running in Guest Offline Mode.');
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app-canvas">
       {/* Global Toast Notification */}
@@ -1290,6 +1339,37 @@ export default function App() {
           </div>
 
           <div className="topbar-right">
+            {/* User Account Pill or Sign In Button */}
+            {currentUser ? (
+              <button 
+                type="button"
+                className="header-user-profile-btn"
+                onClick={() => setShowAuthModal(true)}
+                title={`Account: ${currentUser.displayName || currentUser.email} (Click to manage)`}
+              >
+                <div className="header-user-avatar-tiny">
+                  {currentUser.photoUrl ? (
+                    <img src={currentUser.photoUrl} alt="Avatar" />
+                  ) : (
+                    <span>{(currentUser.displayName || currentUser.email)[0].toUpperCase()}</span>
+                  )}
+                </div>
+                <span className="header-user-shortname">
+                  {currentUser.displayName ? currentUser.displayName.split(' ')[0] : currentUser.email.split('@')[0]}
+                </span>
+                <span className="header-sync-status-dot" title="Neon Database Connected">●</span>
+              </button>
+            ) : (
+              <button 
+                type="button"
+                className="header-signin-cta-btn"
+                onClick={() => setShowAuthModal(true)}
+                title="Sign in with Google or Email"
+              >
+                <span>👤 Sign In</span>
+              </button>
+            )}
+
             {/* Search Icon Button (Relocated to topbar header as requested) */}
             <button 
               className={`header-menu-btn header-search-btn ${activeTab === 'search' ? 'active' : ''}`}
@@ -2740,13 +2820,31 @@ export default function App() {
         }}
         onUserAuthChange={(user, initialData) => {
           setCurrentUser(user);
-          if (user && initialData) {
-            const currentLocal = getStoredData();
-            const merged = mergeCloudAndLocal(currentLocal, initialData);
-            setData(merged);
-            saveStoredData(merged);
-            pushProgressToCloud(user, merged);
-            setLastSyncTime(new Date());
+          if (user) {
+            try {
+              localStorage.removeItem('writyy_guest_session');
+            } catch (e) {}
+            setIsGuestMode(false);
+            if (initialData) {
+              const currentLocal = getStoredData(user);
+              const merged = mergeCloudAndLocal(currentLocal, initialData);
+              setData(merged);
+              saveStoredData(merged, user);
+              pushProgressToCloud(user, merged);
+              setLastSyncTime(new Date());
+            } else {
+              setData(getStoredData(user));
+            }
+          } else {
+            // User logged out: clear guest session flag and load isolated guest store
+            try {
+              localStorage.removeItem('writyy_guest_session');
+            } catch (e) {}
+            setIsGuestMode(false);
+            const guestData = getStoredData(null);
+            setData(guestData);
+            setShowAuthModal(false);
+            showToast('✓ Signed out. Your account data remains safely stored in Neon.');
           }
         }}
       />
