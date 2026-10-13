@@ -299,8 +299,17 @@ export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData =
 // Session management
 export function getCurrentUser() {
   try {
-    const raw = localStorage.getItem(STORAGE_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (typeof localStorage !== 'undefined') {
+      const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v1';
+      if (!localStorage.getItem(GLOBAL_SIGNOUT_FLAG)) {
+        localStorage.removeItem(STORAGE_SESSION_KEY);
+        localStorage.removeItem('writyy_guest_session');
+        localStorage.setItem(GLOBAL_SIGNOUT_FLAG, 'done');
+        return null;
+      }
+      const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }
   } catch (e) {
     return null;
   }

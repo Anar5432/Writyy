@@ -43,6 +43,13 @@ export const getTodayKey = () => {
 export const getActiveUserEmail = () => {
   try {
     if (typeof localStorage !== 'undefined') {
+      const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v1';
+      if (!localStorage.getItem(GLOBAL_SIGNOUT_FLAG)) {
+        localStorage.removeItem('writyy_neon_session');
+        localStorage.removeItem('writyy_guest_session');
+        localStorage.setItem(GLOBAL_SIGNOUT_FLAG, 'done');
+        return null;
+      }
       const raw = localStorage.getItem('writyy_neon_session');
       if (raw) {
         const parsed = JSON.parse(raw);

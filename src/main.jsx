@@ -3,6 +3,18 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+// Automatically sign out any existing session on every device opening the link
+try {
+  if (typeof localStorage !== 'undefined') {
+    const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v1';
+    if (!localStorage.getItem(GLOBAL_SIGNOUT_FLAG)) {
+      localStorage.removeItem('writyy_neon_session');
+      localStorage.removeItem('writyy_guest_session');
+      localStorage.setItem(GLOBAL_SIGNOUT_FLAG, 'done');
+    }
+  }
+} catch (e) {}
+
 // Register Offline Service Worker for 100% Offline PWA & Over-The-Air Updates
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
