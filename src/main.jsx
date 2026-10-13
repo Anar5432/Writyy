@@ -6,7 +6,7 @@ import App from './App.jsx'
 // Automatically sign out any existing session on every device opening the link
 try {
   if (typeof localStorage !== 'undefined') {
-    const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v1';
+    const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v2';
     if (!localStorage.getItem(GLOBAL_SIGNOUT_FLAG)) {
       localStorage.removeItem('writyy_neon_session');
       localStorage.removeItem('writyy_guest_session');
@@ -22,24 +22,19 @@ if ('serviceWorker' in navigator) {
       console.log('[SW] Registered successfully:', registration.scope);
       window.__WRITYY_SW_REGISTRATION__ = registration;
 
-      const notifyUpdate = () => {
-        window.dispatchEvent(new CustomEvent('writyy-update-ready', { detail: { registration } }));
-      };
-
-      // 1. If a new service worker is already waiting to activate
+      // Silently skip waiting immediately without showing any banner or pop-up
       if (registration.waiting) {
-        notifyUpdate();
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
 
-      // 2. If a new service worker is currently installing
+      // If a new service worker is currently installing, automatically skip waiting on install
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
 
         newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[SW] New version ready for user installation!');
-            notifyUpdate();
+          if (newWorker.state === 'installed') {
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
           }
         });
       });

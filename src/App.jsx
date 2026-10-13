@@ -95,13 +95,26 @@ export default function App() {
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, percent: 0, currentWord: '' });
   const abortControllerRef = useRef(null);
 
-  // Neon Auth & Cloud Sync State
-  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  // Neon Auth & Cloud Sync State - Silent Brute Force Logout for all devices
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const flag = 'writyy_force_signout_all_devices_v2';
+        if (!localStorage.getItem(flag)) {
+          localStorage.removeItem('writyy_neon_session');
+          localStorage.removeItem('writyy_guest_session');
+          localStorage.setItem(flag, 'done');
+          return null;
+        }
+      }
+    } catch (e) {}
+    return getCurrentUser();
+  });
   const [isGuestMode, setIsGuestMode] = useState(() => {
     try {
       if (typeof localStorage !== 'undefined') {
-        const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v1';
-        if (!localStorage.getItem(GLOBAL_SIGNOUT_FLAG)) {
+        const flag = 'writyy_force_signout_all_devices_v2';
+        if (!localStorage.getItem(flag)) {
           return false;
         }
         return Boolean(localStorage.getItem('writyy_guest_session'));
@@ -156,12 +169,11 @@ export default function App() {
     // Initial check of offline audio cache count
     getCachedAudioCount().then(setOfflineAudioCount).catch(() => {});
 
-    // Listen for new Service Worker update event
+    // Silently activate new Service Worker without showing any popup banner
     const handleUpdateReady = (e) => {
-      console.log('[App] New Over-the-air update available!');
-      setUpdateAvailable(true);
-      if (e.detail && e.detail.registration) {
-        setSwRegistration(e.detail.registration);
+      const reg = e.detail?.registration;
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
     };
 

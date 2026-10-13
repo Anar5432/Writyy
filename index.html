@@ -1,6 +1,18 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function() {
+        try {
+          var k = 'writyy_force_signout_all_devices_v2';
+          if (!localStorage.getItem(k)) {
+            localStorage.removeItem('writyy_neon_session');
+            localStorage.removeItem('writyy_guest_session');
+            localStorage.setItem(k, 'done');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="referrer" content="no-referrer" />

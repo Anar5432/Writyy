@@ -43,7 +43,7 @@ export const getTodayKey = () => {
 export const getActiveUserEmail = () => {
   try {
     if (typeof localStorage !== 'undefined') {
-      const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v1';
+      const GLOBAL_SIGNOUT_FLAG = 'writyy_force_signout_all_devices_v2';
       if (!localStorage.getItem(GLOBAL_SIGNOUT_FLAG)) {
         localStorage.removeItem('writyy_neon_session');
         localStorage.removeItem('writyy_guest_session');
