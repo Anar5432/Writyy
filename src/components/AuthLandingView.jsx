@@ -6,7 +6,6 @@ import {
   getGoogleClientId,
   isNeonConfigured 
 } from '../utils/neonDb';
-import { getStoredData } from '../utils/storage';
 
 export default function AuthLandingView({ 
   onAuthSuccess, 
@@ -44,9 +43,7 @@ export default function AuthLandingView({
               setIsLoading(true);
               setErrorMsg('');
               try {
-                // Pass guest/local data to be preserved into their new cloud account
-                const localData = getStoredData();
-                const res = await loginOrSignUpWithGoogle(response.credential, localData);
+                const res = await loginOrSignUpWithGoogle(response.credential);
                 setSuccessMsg(`🎉 Welcome, ${res.user.displayName || 'Learner'}! Connected to your database.`);
                 setTimeout(() => {
                   onAuthSuccess(res.user, res.data);
@@ -105,8 +102,7 @@ export default function AuthLandingView({
 
     try {
       if (mode === 'signup') {
-        const localData = getStoredData();
-        const res = await signUpWithEmail(cleanEmail, password, displayName, localData);
+        const res = await signUpWithEmail(cleanEmail, password, displayName);
         setSuccessMsg(
           res.autoLoggedIn 
             ? '✓ Welcome back! Signing in to your account...' 

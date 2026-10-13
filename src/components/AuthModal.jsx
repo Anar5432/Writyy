@@ -9,9 +9,7 @@ import {
   getGoogleClientId,
   isNeonConfigured,
   changePassword,
-  updateProfileDisplayName
 } from '../utils/neonDb';
-import { getStoredData } from '../utils/storage';
 
 export default function AuthModal({ 
   isOpen, 
@@ -78,8 +76,7 @@ export default function AuthModal({
               setIsLoading(true);
               setErrorMsg('');
               try {
-                const localData = getStoredData();
-                const res = await loginOrSignUpWithGoogle(response.credential, localData);
+                const res = await loginOrSignUpWithGoogle(response.credential);
                 setSuccessMsg(`🎉 Welcome, ${res.user.displayName}! Synced with Neon.`);
                 if (onUserAuthChange) onUserAuthChange(res.user, res.data);
                 setTimeout(() => onClose(), 800);
@@ -138,8 +135,7 @@ export default function AuthModal({
         if (password.length < 6) {
           throw new Error('Password must be at least 6 characters.');
         }
-        const localData = getStoredData();
-        const res = await signUpWithEmail(email, password, displayName, localData);
+        const res = await signUpWithEmail(email, password, displayName);
         setSuccessMsg(res.autoLoggedIn ? '✓ Connected to your existing account! Syncing vocabulary...' : '🎉 Account created! Connected to Neon Cloud Database.');
         if (onUserAuthChange) onUserAuthChange(res.user, res.data);
         setTimeout(() => onClose(), 800);

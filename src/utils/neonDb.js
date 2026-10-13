@@ -90,7 +90,7 @@ async function hashPassword(password) {
 }
 
 // Account Registration
-export async function signUpWithEmail(email, password, displayName = '', existingData = null) {
+export async function signUpWithEmail(email, password, displayName = '') {
   const sql = getSql();
   if (!sql) {
     throw new Error('Neon database is not configured. Please paste your Neon Connection String in Settings.');
@@ -120,18 +120,8 @@ export async function signUpWithEmail(email, password, displayName = '', existin
     }
   }
 
-  const payloadData = existingData ? {
-    displayName: displayName.trim() || cleanEmail.split('@')[0],
-    stack1_mastered: existingData.stack1_mastered || [],
-    stack2_spelling: existingData.stack2_spelling || [],
-    stack3_meaning: existingData.stack3_meaning || [],
-    struggledHistory: existingData.struggledHistory || [],
-    notes: existingData.notes || [],
-    customWords: (existingData.allWords || []).filter(w => w.id && w.id.startsWith('custom_')),
-    stats: existingData.stats || { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
-    history: (existingData.history || []).slice(-100),
-    lastUpdated: new Date().toISOString()
-  } : {
+  // Every new account starts with its own completely clean, isolated personal database
+  const payloadData = {
     displayName: displayName.trim() || cleanEmail.split('@')[0],
     stack1_mastered: [],
     stack2_spelling: [],
@@ -215,7 +205,7 @@ export function decodeJwt(token) {
 }
 
 // 1-Click Google Sign-In / Sign-Up with Neon Cloud Sync
-export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData = null) {
+export async function loginOrSignUpWithGoogle(jwtCredential) {
   const profile = decodeJwt(jwtCredential);
   if (!profile || !profile.email) {
     throw new Error('Could not read user profile from Google credential.');
@@ -251,20 +241,8 @@ export async function loginOrSignUpWithGoogle(jwtCredential, existingLocalData =
       `;
     }
   } else {
-    // New user with Google: preserve any local progress from this device!
-    userData = existingLocalData ? {
-      displayName,
-      photoUrl,
-      stack1_mastered: existingLocalData.stack1_mastered || [],
-      stack2_spelling: existingLocalData.stack2_spelling || [],
-      stack3_meaning: existingLocalData.stack3_meaning || [],
-      struggledHistory: existingLocalData.struggledHistory || [],
-      notes: existingLocalData.notes || [],
-      customWords: (existingLocalData.allWords || []).filter(w => w.id && w.id.startsWith('custom_')),
-      stats: existingLocalData.stats || { totalTested: 0, correctSpelling: 0, xpBalance: 0, daily: {} },
-      history: (existingLocalData.history || []).slice(-100),
-      lastUpdated: new Date().toISOString()
-    } : {
+    // New user with Google: completely clean, isolated personal database
+    userData = {
       displayName,
       photoUrl,
       stack1_mastered: [],

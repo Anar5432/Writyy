@@ -81,13 +81,16 @@ export const getUserStorageKey = (userOrEmail) => {
 
 export const getStoredData = (userOrEmail) => {
   const targetKey = getUserStorageKey(userOrEmail);
+  // Permanently remove legacy monolithic keys so they never contaminate any account
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('writyy_app_data_v2');
+      localStorage.removeItem('writyy_app_data_v1');
+    }
+  } catch (e) {}
+
   try {
     let raw = typeof localStorage !== 'undefined' ? localStorage.getItem(targetKey) : null;
-    
-    // If guest key has nothing, check legacy storage keys so guest work is never lost
-    if (!raw && targetKey === 'writyy_guest_data' && typeof localStorage !== 'undefined') {
-      raw = localStorage.getItem('writyy_app_data_v2') || localStorage.getItem('writyy_app_data_v1');
-    }
 
     if (!raw) {
       return initializeDefaultData(userOrEmail);

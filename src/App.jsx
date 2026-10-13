@@ -283,7 +283,7 @@ export default function App() {
   // Save changes to localStorage & auto-sync to Firebase Cloud
   // Save changes to localStorage & auto-sync to Neon Cloud Database
   useEffect(() => {
-    saveStoredData(data);
+    saveStoredData(data, currentUser);
     if (currentUser) {
       setIsSyncing(true);
       scheduleCloudSync(currentUser, data);
@@ -295,13 +295,16 @@ export default function App() {
   // Load progress from Neon on initial render or user login
   useEffect(() => {
     if (currentUser) {
+      // Immediately set user's isolated local data so UI reflects their account instantly
+      const currentLocal = getStoredData(currentUser);
+      setData(currentLocal);
+
       setIsSyncing(true);
       fetchProgressFromCloud(currentUser).then(async (cloudData) => {
-        const currentLocal = getStoredData();
         if (cloudData) {
           const merged = mergeCloudAndLocal(currentLocal, cloudData);
           setData(merged);
-          saveStoredData(merged);
+          saveStoredData(merged, currentUser);
           await pushProgressToCloud(currentUser, merged);
           setLastSyncTime(new Date());
           showToast('🐘 Synced with Neon Cloud!');
@@ -326,11 +329,11 @@ export default function App() {
       if (currentUser) {
         setIsSyncing(true);
         try {
-          const currentLocal = getStoredData();
+          const currentLocal = getStoredData(currentUser);
           const cloudData = await fetchProgressFromCloud(currentUser);
           const merged = mergeCloudAndLocal(currentLocal, cloudData);
           setData(merged);
-          saveStoredData(merged);
+          saveStoredData(merged, currentUser);
           await pushProgressToCloud(currentUser, merged);
           setLastSyncTime(new Date());
           showToast('✓ Synced with Neon Cloud Database!');
@@ -356,10 +359,10 @@ export default function App() {
     showToast('🐘 Syncing with Neon...');
     try {
       const cloudData = await fetchProgressFromCloud(currentUser);
-      const currentLocal = getStoredData();
+      const currentLocal = getStoredData(currentUser);
       const merged = mergeCloudAndLocal(currentLocal, cloudData);
 
-      saveStoredData(merged);
+      saveStoredData(merged, currentUser);
       setData(merged);
 
       const success = await pushProgressToCloud(currentUser, merged);
@@ -899,7 +902,7 @@ export default function App() {
         }
       };
 
-      saveStoredData(nextData);
+      saveStoredData(nextData, currentUser);
       scheduleCloudSync(currentUser, nextData);
       return nextData;
     });
@@ -1052,7 +1055,7 @@ export default function App() {
         }
       };
 
-      saveStoredData(nextData);
+      saveStoredData(nextData, currentUser);
       scheduleCloudSync(currentUser, nextData);
       return nextData;
     });
@@ -1142,7 +1145,7 @@ export default function App() {
         }
       };
 
-      saveStoredData(nextData);
+      saveStoredData(nextData, currentUser);
       scheduleCloudSync(currentUser, nextData);
       return nextData;
     });
@@ -1339,7 +1342,7 @@ export default function App() {
         ];
       }
       const updatedData = { ...prev, notes: newNotes };
-      saveStoredData(updatedData);
+      saveStoredData(updatedData, currentUser);
       scheduleCloudSync(currentUser, updatedData);
       return updatedData;
     });
@@ -1349,7 +1352,7 @@ export default function App() {
     setData(prev => {
       const newNotes = (prev.notes || []).filter(n => n.id !== noteId);
       const updatedData = { ...prev, notes: newNotes };
-      saveStoredData(updatedData);
+      saveStoredData(updatedData, currentUser);
       scheduleCloudSync(currentUser, updatedData);
       return updatedData;
     });
@@ -1364,7 +1367,7 @@ export default function App() {
         return n;
       });
       const updatedData = { ...prev, notes: newNotes };
-      saveStoredData(updatedData);
+      saveStoredData(updatedData, currentUser);
       scheduleCloudSync(currentUser, updatedData);
       return updatedData;
     });
