@@ -1,18 +1,25 @@
 // Web Audio API synthesized sound effects - 100% offline, zero external files
+import { configureAmbientAudio } from './audio';
+
 class SoundEffects {
   constructor() {
     this.ctx = null;
   }
 
   getContext() {
+    configureAmbientAudio();
     if (!this.ctx && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
-        this.ctx = new AudioCtx();
+        try {
+          this.ctx = new AudioCtx();
+        } catch (e) {}
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      try {
+        this.ctx.resume().catch(() => {});
+      } catch (e) {}
     }
     return this.ctx;
   }

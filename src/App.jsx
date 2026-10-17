@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CEFR_LEVELS } from './data/words';
 import { AWL_SUBLISTS, AWL_SUBLIST_INFO, AWL_WORDS, AWL_WORDS_BY_SUBLIST, AWL_MAP } from './data/awlData';
-import { speechService } from './utils/audio';
+import { speechService, configureAmbientAudio } from './utils/audio';
 import { getCachedAudioCount, downloadAudioPack, fetchWordAudioBlob } from './utils/audioCache';
 import { sfx } from './utils/sfx';
 import { getStoredData, saveStoredData, resetAllProgress, ensureAwlEnriched, enrichWordWithAwl, getTodayKey } from './utils/storage';
@@ -153,6 +153,8 @@ export default function App() {
 
   // Check if running as installed standalone app on phone & setup update listeners
   useEffect(() => {
+    configureAmbientAudio();
+
     if (typeof window !== 'undefined') {
       if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
         setIsStandalone(true);
@@ -725,23 +727,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, submitted, reviewSubmitted, currentIndex, reviewIndex, queue.length, reviewQueue.length]);
 
-  // Unlock mobile audio context upon first interaction and play waiting card
+  // Unlock mobile audio context upon first interaction cleanly without pausing background music
   useEffect(() => {
     let triggered = false;
     const handleFirstTouch = () => {
       if (triggered) return;
       triggered = true;
+      configureAmbientAudio();
       speechService.unlockAudio();
       sfx.getContext();
-
-      // If opening offline or fresh, play the word currently visible on screen
-      setTimeout(() => {
-        if (activeTab === 'study' && queue[currentIndex] && !submitted) {
-          playCurrentAudio(queue[currentIndex].word);
-        } else if (activeTab === 'review' && reviewQueue[reviewIndex] && !reviewSubmitted) {
-          playCurrentAudio(reviewQueue[reviewIndex].word);
-        }
-      }, 100);
 
       window.removeEventListener('touchstart', handleFirstTouch);
       window.removeEventListener('click', handleFirstTouch);
@@ -755,7 +749,7 @@ export default function App() {
       window.removeEventListener('click', handleFirstTouch);
       window.removeEventListener('pointerdown', handleFirstTouch);
     };
-  }, [activeTab, currentIndex, reviewIndex, queue, reviewQueue, submitted, reviewSubmitted]);
+  }, []);
 
   const resetStudyInputs = () => {
     setUserInput('');
@@ -2952,6 +2946,14 @@ export default function App() {
                 <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0284c7' }}>
                   {offlineAudioCount} words ready
                 </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '8px' }}>
+                <span style={{ fontSize: '1.1rem' }}>🎵</span>
+                <div style={{ fontSize: '0.76rem', color: '#166534', lineHeight: 1.35 }}>
+                  <strong style={{ color: '#14532d' }}>Spotify & YouTube Mixing Active</strong><br />
+                  Pronunciation audio plays smoothly alongside your music or videos without pausing them.
+                </div>
               </div>
             </div>
 

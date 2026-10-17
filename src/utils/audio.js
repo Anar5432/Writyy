@@ -7,10 +7,33 @@
 
 import { getCachedAudioBlob, fetchWordAudioBlob } from './audioCache';
 
+// Configure AudioSession to 'ambient' so mobile OSes (iOS Safari/PWA & Android)
+// mix our sound with background apps (Spotify, YouTube, Podcasts) instead of pausing them!
+export function configureAmbientAudio() {
+  if (typeof navigator !== 'undefined') {
+    if ('audioSession' in navigator) {
+      try {
+        if (navigator.audioSession.type !== 'ambient') {
+          navigator.audioSession.type = 'ambient';
+        }
+      } catch (e) {
+        // Safe fallback for older mobile engines
+      }
+    }
+    // Prevent Writyy from hijacking lock screen / Control Center media controls from Spotify/YouTube
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = 'none';
+      } catch (e) {}
+    }
+  }
+}
+
 class SpeechService {
   constructor() {
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
     this.audioPlayer = typeof window !== 'undefined' ? new Audio() : null;
+    this.audioCtx = null;
     this.voices = [];
     this.rate = 1.05;
     this.pitch = 1.0;
@@ -19,6 +42,18 @@ class SpeechService {
     this.safetyTimer = null;
     this.currentObjectUrl = null;
     this.currentPlayToken = 0; // Atomic token to prevent duplicate or overlapping playback
+
+    // Immediately set ambient mode on startup
+    configureAmbientAudio();
+
+    if (this.audioPlayer) {
+      try {
+        this.audioPlayer.preload = 'auto';
+        if ('preservesPitch' in this.audioPlayer) {
+          this.audioPlayer.preservesPitch = true;
+        }
+      } catch (e) {}
+    }
 
     if (this.synth) {
       this.initVoices();
@@ -30,6 +65,23 @@ class SpeechService {
         setTimeout(() => this.initVoices(), 1200);
       }
     }
+  }
+
+  getAudioContext() {
+    if (!this.audioCtx && typeof window !== 'undefined') {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        try {
+          this.audioCtx = new AudioCtx();
+        } catch (e) {}
+      }
+    }
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try {
+        this.audioCtx.resume().catch(() => {});
+      } catch (e) {}
+    }
+    return this.audioCtx;
   }
 
   initVoices() {
@@ -60,24 +112,17 @@ class SpeechService {
     this.selectedVoice = neutralUsVoice || fallbackEnVoice;
   }
 
+  // Warm up audio system cleanly without playing sounds that interrupt background Spotify or YouTube
   unlockAudio() {
+    configureAmbientAudio();
     this.initVoices();
-    if (this.audioPlayer) {
-      try {
-        this.audioPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-        this.audioPlayer.load();
-        const p = this.audioPlayer.play();
-        if (p) p.then(() => this.audioPlayer.pause()).catch(() => {});
-      } catch (e) {}
+    const ctx = this.getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
     }
-    if (this.synth) {
+    if (this.synth && this.synth.paused) {
       try {
-        if (this.synth.paused) {
-          this.synth.resume();
-        }
-        const dummy = new SpeechSynthesisUtterance(' ');
-        dummy.volume = 0.01;
-        this.synth.speak(dummy);
+        this.synth.resume();
       } catch (e) {}
     }
   }
@@ -180,6 +225,9 @@ class SpeechService {
       return;
     }
 
+    // Always enforce ambient session so background audio like Spotify or YouTube is never interrupted
+    configureAmbientAudio();
+
     let errorHandled = false;
     let playTimeout = null;
 
@@ -187,6 +235,9 @@ class SpeechService {
       if (errorHandled) return;
       errorHandled = true;
       if (playTimeout) clearTimeout(playTimeout);
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+      }
       if (this.currentPlayToken === token && onError) {
         onError();
       }
@@ -205,6 +256,7 @@ class SpeechService {
 
       this.audioPlayer.onplay = () => {
         if (playTimeout) clearTimeout(playTimeout);
+        configureAmbientAudio();
         if (this.currentPlayToken === token) {
           onStart();
         }
@@ -212,6 +264,9 @@ class SpeechService {
 
       this.audioPlayer.onended = () => {
         if (playTimeout) clearTimeout(playTimeout);
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+        }
         if (this.currentPlayToken === token) {
           onEnd();
         }
@@ -219,6 +274,9 @@ class SpeechService {
 
       this.audioPlayer.onerror = (e) => {
         if (playTimeout) clearTimeout(playTimeout);
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+        }
         triggerErrorOnce();
       };
 
@@ -316,6 +374,9 @@ class SpeechService {
       try {
         this.synth.cancel();
       } catch (e) {}
+    }
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
     }
     this.isSpeaking = false;
   }
